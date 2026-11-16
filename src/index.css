@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-black text-ink-100 font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    @apply bg-white text-black;
+  }
+  :focus-visible {
+    outline: 1px solid rgba(255, 255, 255, 0.8);
+    outline-offset: 2px;
+  }
+  /* thin, quiet scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+  }
+}
+
+@layer components {
+  /* Frosted glass surface */
+  .glass {
+    @apply bg-white/[0.04] border border-white/10 backdrop-blur-xl;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06), 0 20px 40px -20px rgba(0, 0, 0, 0.8);
+  }
+  .glass-strong {
+    @apply bg-ink-900/90 border border-white/10 backdrop-blur-2xl;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 30px 60px -20px rgba(0, 0, 0, 0.9);
+  }
+
+  /* SpaceX-style uppercase label */
+  .label {
+    @apply font-display uppercase tracking-wider2 text-[13px] font-semibold;
+  }
+  .eyebrow {
+    @apply uppercase tracking-widest2 text-[11px] font-medium text-ink-300;
+  }
+
+  /* Outlined button that fills on hover */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-6 border-2 border-white/90 text-white
+      font-display uppercase tracking-wider2 text-[13px] font-semibold
+      transition-colors duration-300 hover:bg-white hover:text-black
+      disabled:opacity-30 disabled:pointer-events-none;
+  }
+  .btn-solid {
+    @apply btn bg-white text-black hover:bg-transparent hover:text-white;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-5 border border-white/15 text-ink-200
+      font-display uppercase tracking-wider2 text-[12px] font-semibold
+      transition-colors duration-300 hover:border-white/50 hover:text-white;
+  }
+  .btn-danger {
+    @apply btn-ghost hover:border-white hover:bg-white hover:text-black;
+  }
+
+  .icon-btn {
+    @apply inline-flex items-center justify-center w-10 h-10 rounded-full text-ink-300
+      transition-colors duration-200 hover:text-white hover:bg-white/10;
+  }
+
+  .field {
+    @apply w-full h-12 px-4 bg-white/[0.03] border border-white/10 text-white placeholder:text-ink-400
+      outline-none transition-colors duration-200 hover:border-white/25 focus:border-white/60 focus:bg-white/[0.05];
+  }
+
+  .divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .logo-mono {
+    filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.08));
+  }
+  /* subtle space backdrop */
+  .bg-space {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(255, 255, 255, 0.07), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255, 255, 255, 0.05), transparent 60%),
+      #000;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+/* emoji-picker-react: match the monochrome palette */
+.EmojiPickerReact.epr-dark-theme {
+  --epr-bg-color: #0a0a0a !important;
+  --epr-category-label-bg-color: rgba(10, 10, 10, 0.92) !important;
+  --epr-picker-border-color: rgba(255, 255, 255, 0.1) !important;
+  --epr-search-input-bg-color: rgba(255, 255, 255, 0.05) !important;
+  --epr-hover-bg-color: rgba(255, 255, 255, 0.1) !important;
+  --epr-focus-bg-color: rgba(255, 255, 255, 0.15) !important;
+  --epr-highlight-color: #fff !important;
+  --epr-search-border-color: rgba(255, 255, 255, 0.5) !important;
+  --epr-picker-border-radius: 0 !important;
+}

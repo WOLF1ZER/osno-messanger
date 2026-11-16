@@ -1,0 +1,9 @@
+# Minimal Supabase CLI config for OSNO (used by `supabase link` / `supabase functions deploy`).
+project_id = "osno"
+
+[functions.livekit-token]
+verify_jwt = true
+
+# Called by database triggers with a shared secret header, not a user JWT.
+[functions.send-push]
+verify_jwt = false

@@ -46,7 +46,7 @@ const Calls = ({ calls, users, chatsById, onCall, onOpenChat, onJoin, loading })
         {rows.map((c, i) => {
           const chat = c.isGroup ? chatsById[c.chatId] : null;
           if (c.isGroup && !chat) return null; // a group you left
-          const user = c.isGroup ? { name: chat.title, avatar: null, online: false } : users[c.userId];
+          const user = c.isGroup ? { name: chat.title, avatar: chat.avatar ?? null, online: false } : users[c.userId];
           if (!user) return null;
           const live = c.isGroup && ["ringing", "active"].includes(c.status) && Date.now() - c.timestamp < 6 * 3600e3;
           const DirIcon = c.missed ? FiPhoneMissed : c.direction === "incoming" ? FiArrowDownLeft : FiArrowUpRight;

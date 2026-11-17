@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform } from "framer-motion";
 import { FiFileText, FiDownload, FiCornerUpLeft, FiSmile } from "react-icons/fi";
 import { IoCheckmarkDone, IoCheckmark, IoTimeOutline, IoAlertCircleOutline } from "react-icons/io5";
 import AudioMessage from "./AudioMessage";
+import VideoNoteMessage from "./VideoNoteMessage";
 import { formatBytes, formatClock, messagePreview, truncateMiddle } from "../../lib/format";
 import { useFileUrl } from "../../lib/useFileUrl";
 
@@ -65,6 +66,7 @@ const MessageBubble = ({
 }) => {
   const mine = message.sentByMe;
   const isImage = message.type === "image";
+  const isVideo = message.type === "video";
   const url = useFileUrl(["text", "system"].includes(message.type) ? null : message);
   const pressTimer = useRef(null);
   const pressStart = useRef(null);
@@ -126,14 +128,16 @@ const MessageBubble = ({
           cancelPress();
           onOpenActions?.(message);
         }}
-        className={`relative min-w-0 max-w-[82vw] sm:max-w-[min(70%,560px)] select-text ${isImage ? "p-1.5" : "px-4 py-2.5"} ${
-          mine
-            ? "bg-white text-black rounded-2xl rounded-br-md"
-            : "bg-white/[0.07] border border-white/10 backdrop-blur-md text-ink-100 rounded-2xl rounded-bl-md"
+        className={`relative min-w-0 max-w-[82vw] sm:max-w-[min(70%,560px)] select-text ${isVideo ? "p-0" : isImage ? "p-1.5" : "px-4 py-2.5"} ${
+          isVideo
+            ? "bg-transparent text-white"
+            : mine
+              ? "bg-white text-black rounded-2xl rounded-br-md"
+              : "bg-white/[0.07] border border-white/10 backdrop-blur-md text-ink-100 rounded-2xl rounded-bl-md"
         } ${highlighted ? "ring-2 ring-white/80 ring-offset-2 ring-offset-black transition-shadow" : ""}`}
       >
         {message.replyTo && (
-          <Quote quote={quote} name={quoteName} mine={mine} onClick={() => onJumpTo?.(message.replyTo)} />
+          <Quote quote={quote} name={quoteName} mine={mine && !isVideo} onClick={() => onJumpTo?.(message.replyTo)} />
         )}
         {message.type === "text" && (
           <p className="whitespace-pre-wrap break-words leading-relaxed text-[15px]">{message.text}</p>
@@ -141,6 +145,12 @@ const MessageBubble = ({
 
         {message.type === "audio" && (
           <AudioMessage id={message.id} src={url} duration={message.duration} mine={mine} />
+        )}
+
+        {isVideo && (
+          <div className={message.replyTo ? "mt-1" : ""}>
+            <VideoNoteMessage src={url} duration={message.duration} pending={message.pending} />
+          </div>
         )}
 
         {isImage && (
@@ -191,7 +201,7 @@ const MessageBubble = ({
         <span
           className={`flex items-center justify-end gap-1 text-[10px] tabular-nums mt-1 ${
             isImage ? "px-2 pb-1" : ""
-          } ${mine ? "text-black/50" : "text-ink-400"}`}
+          } ${isVideo ? "text-ink-400 pr-2" : mine ? "text-black/50" : "text-ink-400"}`}
         >
           {formatClock(message.timestamp)}
           {mine && message.failed && (

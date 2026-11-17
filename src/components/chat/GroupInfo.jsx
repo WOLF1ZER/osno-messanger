@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { IoClose } from "react-icons/io5";
-import { FiPhone, FiVideo, FiEdit2, FiCheck, FiUserPlus, FiX, FiLogOut, FiLock, FiFolder, FiBellOff, FiUsers } from "react-icons/fi";
+import { FiPhone, FiVideo, FiEdit2, FiCheck, FiUserPlus, FiX, FiLogOut, FiLock, FiFolder, FiBellOff, FiUsers, FiCamera, FiLoader, FiTrash2 } from "react-icons/fi";
 import { MdPushPin } from "react-icons/md";
 import Avatar from "../ui/Avatar";
 import DisplayName from "../ui/DisplayName";
@@ -14,8 +14,12 @@ import { GROUP_LIMIT } from "../../lib/api";
 /** Details and management for a group chat. */
 const GroupInfo = ({
   chat, me, users, contactIds, onClose, onCall, onTogglePin, onToggleMute, onTogglePrivate,
-  onRename, onAddMembers, onRemoveMember, onLeave, onOpenDirect, addPeople,
+  onRename, onAddMembers, onRemoveMember, onLeave, onOpenDirect, addPeople, onChangePhoto, onRemovePhoto,
 }) => {
+  const fileId = useId();
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const [open, setOpen] = useState("members");
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chat.title);
@@ -32,7 +36,37 @@ const GroupInfo = ({
   const members = chat.memberIds;
   const free = GROUP_LIMIT - members.length;
   const onlineCount = members.filter((id) => id !== me.id && users[id]?.online).length;
-  const shared = chat.messages.filter((m) => ["file", "image", "audio"].includes(m.type));
+  const shared = chat.messages.filter((m) => ["file", "image", "audio", "video"].includes(m.type));
+
+  // group photo — only the owner (creator) can change it; the server enforces this too
+  const pickPhoto = async (file) => {
+    if (!file || !isOwner) return;
+    if (!file.type.startsWith("image/")) return setPhotoError("Please choose an image.");
+    setPhotoError("");
+    const preview = URL.createObjectURL(file);
+    setPhotoPreview(preview);
+    setPhotoBusy(true);
+    try {
+      await onChangePhoto?.(file);
+    } catch (e) {
+      setPhotoError(e.message || "Couldn't upload photo");
+    } finally {
+      setPhotoBusy(false);
+      setPhotoPreview(null);
+      URL.revokeObjectURL(preview);
+    }
+  };
+  const removePhoto = async () => {
+    setPhotoError("");
+    setPhotoBusy(true);
+    try {
+      await onRemovePhoto?.();
+    } catch (e) {
+      setPhotoError(e.message || "Couldn't remove photo");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const saveTitle = async (e) => {
     e.preventDefault();
@@ -72,7 +106,43 @@ const GroupInfo = ({
       </div>
 
       <div className="flex flex-col items-center text-center px-6 pt-10 pb-8">
-        <Avatar name={chat.title} size="2xl" group />
+        <div className="relative">
+          <Avatar name={chat.title} src={photoPreview ?? chat.avatar} size="2xl" group />
+          {photoBusy && (
+            <span className="absolute inset-0 w-36 h-36 rounded-full grid place-items-center bg-black/60">
+              <FiLoader size={26} className="text-white animate-spin" />
+            </span>
+          )}
+          {isOwner && (
+            <>
+              <label
+                htmlFor={fileId}
+                className="absolute bottom-1 left-1 w-10 h-10 grid place-items-center rounded-full bg-white text-black cursor-pointer hover:scale-105 transition-transform shadow-lg ring-2 ring-black"
+                title={chat.avatar ? "Change group photo" : "Add group photo"}
+                aria-label={chat.avatar ? "Change group photo" : "Add group photo"}
+              >
+                <FiCamera size={16} />
+              </label>
+              <input
+                id={fileId}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={photoBusy}
+                onChange={(e) => {
+                  pickPhoto(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </>
+          )}
+        </div>
+        {isOwner && chat.avatar && !photoBusy && (
+          <button onClick={removePhoto} className="mt-3 flex items-center gap-1.5 text-[12px] uppercase tracking-wider text-ink-400 hover:text-white">
+            <FiTrash2 size={12} /> Remove photo
+          </button>
+        )}
+        {photoError && <p className="mt-2 text-sm text-ink-200">{photoError}</p>}
         {editing ? (
           <form onSubmit={saveTitle} className="mt-6 w-full flex gap-2">
             <input autoFocus maxLength={64} value={title} onChange={(e) => setTitle(e.target.value)} className="field min-w-0" aria-label="Group name" />

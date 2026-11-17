@@ -35,6 +35,7 @@ export const useMessenger = (me) => {
   const [threads, setThreads] = useState({}); // chatId -> { items, loading, hasMore }
   const [quotes, setQuotes] = useState({}); // messageId -> message (originals of replies that aren't loaded)
   const [receipts, setReceipts] = useState({}); // chatId -> { userId: readAt (ms) }
+  const [groupAvatars, setGroupAvatars] = useState({}); // chatId -> photo url
   const [online, setOnline] = useState(() => new Set());
   const [loadingChats, setLoadingChats] = useState(true);
   const [error, setError] = useState(null);
@@ -81,6 +82,10 @@ export const useMessenger = (me) => {
       const rows = await api.fetchChats();
       setChats(rows.map((r) => rowToChat(r, myId)).filter((c) => c.isGroup || c.userId));
       addPeople(rows.filter((r) => r.other_id).map(rowToUser));
+      api
+        .fetchGroupAvatars(rows.filter((r) => r.is_group).map((r) => r.chat_id))
+        .then(setGroupAvatars)
+        .catch((e) => console.warn("group photos", e));
       api
         .fetchReadReceipts(rows.map((r) => r.chat_id))
         .then((list) => {
@@ -310,6 +315,12 @@ export const useMessenger = (me) => {
     return send(chatId, { type: "audio", localUrl: url, duration, fileName: file.name, fileSize: file.size, mimeType: file.type, replyTo }, file);
   };
 
+  const sendVideoNote = (chatId, { blob, url, duration }, replyTo) => {
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    const file = new File([blob], `circle-${Date.now()}.${ext}`, { type: blob.type || `video/${ext}` });
+    return send(chatId, { type: "video", localUrl: url, duration, fileName: file.name, fileSize: file.size, mimeType: file.type, replyTo }, file);
+  };
+
   const sendFiles = (chatId, files, caption, replyTo) =>
     Promise.all(
       files.map((f, i) =>
@@ -431,6 +442,7 @@ export const useMessenger = (me) => {
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chats" }, ({ new: row }) => {
         patchChat(row.id, { privateMode: row.private_mode });
+        if ("avatar_url" in row) setGroupAvatars((g) => ({ ...g, [row.id]: row.avatar_url }));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "read_receipts" }, ({ new: r }) => {
         if (r?.chat_id && r.read_at) setReceipt(r.chat_id, r.user_id, r.read_at);
@@ -496,13 +508,14 @@ export const useMessenger = (me) => {
         const items = t?.loaded ? t.items : c.lastMessage ? [c.lastMessage] : [];
         return {
           ...c,
+          avatar: c.isGroup ? groupAvatars[c.id] ?? null : undefined,
           lastMessage: withSeen(c.lastMessage),
           messages: items.map(withSeen),
           loadingMessages: Boolean(t?.loading),
           hasMore: t?.hasMore ?? false,
         };
       }),
-    [chats, threads, receipts, myId],
+    [chats, threads, receipts, myId, groupAvatars],
   );
 
   // total unread messages in non-muted chats (for the app icon badge)
@@ -527,6 +540,15 @@ export const useMessenger = (me) => {
     sendText,
     sendAudio,
     sendFiles,
+    sendVideoNote,
+    setGroupPhoto: async (chatId, file) => {
+      const url = await api.setGroupAvatar(chatId, file, groupAvatars[chatId]);
+      setGroupAvatars((g) => ({ ...g, [chatId]: url }));
+    },
+    removeGroupPhoto: async (chatId) => {
+      await api.removeGroupAvatar(chatId, groupAvatars[chatId]);
+      setGroupAvatars((g) => ({ ...g, [chatId]: null }));
+    },
     startChatWith,
     togglePin,
     setPrivate,

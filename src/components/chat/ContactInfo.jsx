@@ -15,7 +15,7 @@ const ContactInfo = ({ chat, user, onClose, onCall, onTogglePin, onToggleMute, o
   const [confirmDelete, setConfirmDelete] = useState(false);
   const toggle = (key) => setOpen((o) => (o === key ? null : key));
 
-  const shared = chat.messages.filter((m) => m.type === "file" || m.type === "image" || m.type === "audio");
+  const shared = chat.messages.filter((m) => ["file", "image", "audio", "video"].includes(m.type));
 
   const actionRow = "w-full flex items-center justify-between px-4 h-12 border border-white/10 text-sm transition-colors";
 

@@ -65,6 +65,7 @@ export const messagePreview = (m) => {
   if (!m) return "No messages yet";
   if (m.type === "system") return m.text ?? m.caption ?? "";
   if (m.type === "audio") return "Voice message";
+  if (m.type === "video") return "⭕ Video message";
   if (m.type === "image") return "Photo";
   if (m.type === "file") return m.fileName ?? "File";
   return m.text;

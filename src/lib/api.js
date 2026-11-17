@@ -251,6 +251,32 @@ export const setAvatar = async (userId, file, previousUrl) => {
   return url;
 };
 
+/** Group photo: crop, upload to avatars/groups/<chat>/, save on the chat (adds a "changed the group photo" note). */
+export const setGroupAvatar = async (chatId, file, previousUrl) => {
+  if (!file.type.startsWith("image/")) throw new Error("Please choose an image.");
+  const blob = await squareAvatar(file);
+  const path = `groups/${chatId}/avatar-${Date.now()}.jpg`;
+  must(await supabase.storage.from(AVATARS).upload(path, blob, { contentType: "image/jpeg", upsert: false }));
+  const url = supabase.storage.from(AVATARS).getPublicUrl(path).data.publicUrl;
+  must(await supabase.rpc("set_group_avatar", { p_chat: chatId, p_url: url }));
+  const oldPath = avatarPathFromUrl(previousUrl);
+  if (oldPath?.startsWith(`groups/${chatId}/`)) supabase.storage.from(AVATARS).remove([oldPath]); // best effort
+  return url;
+};
+
+export const removeGroupAvatar = async (chatId, currentUrl) => {
+  must(await supabase.rpc("set_group_avatar", { p_chat: chatId, p_url: null }));
+  const oldPath = avatarPathFromUrl(currentUrl);
+  if (oldPath?.startsWith(`groups/${chatId}/`)) await supabase.storage.from(AVATARS).remove([oldPath]);
+};
+
+/** { chatId: avatarUrl } for these group chats */
+export const fetchGroupAvatars = async (chatIds) => {
+  if (!chatIds.length) return {};
+  const rows = must(await supabase.from("chats").select("id, avatar_url").in("id", chatIds));
+  return Object.fromEntries(rows.map((r) => [r.id, r.avatar_url]));
+};
+
 export const removeAvatar = async (userId, currentUrl) => {
   await updateMyProfile(userId, { avatar_url: null });
   const oldPath = avatarPathFromUrl(currentUrl);

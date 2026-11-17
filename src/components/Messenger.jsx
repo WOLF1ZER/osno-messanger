@@ -122,7 +122,7 @@ const Messenger = () => {
       return {
         id: chat.id,
         name: chat.title,
-        avatar: null,
+        avatar: chat.avatar ?? null,
         online: false,
         isGroup: true,
         status: `${chat.memberIds.length} members${online ? `, ${online} online` : ""}`,
@@ -381,6 +381,7 @@ const Messenger = () => {
       onCall={(video) => callChat(activeChat, video)}
       onSendText={(text, replyTo) => m.sendText(activeChat.id, text, replyTo)}
       onSendAudio={(audio, replyTo) => m.sendAudio(activeChat.id, audio, replyTo)}
+      onSendVideoNote={(video, replyTo) => m.sendVideoNote(activeChat.id, video, replyTo)}
       onSendFiles={(files, caption, replyTo) => m.sendFiles(activeChat.id, files, caption, replyTo)}
       onUnblock={() => m.toggleBlock(activeChat)}
       onLoadOlder={() => m.loadOlder(activeChat.id)}
@@ -404,6 +405,8 @@ const Messenger = () => {
         onToggleMute={() => m.toggleMute(activeChat)}
         onTogglePrivate={(v) => m.setPrivate(activeChat, v)}
         onRename={(title) => m.renameGroup(activeChat.id, title)}
+        onChangePhoto={(file) => m.setGroupPhoto(activeChat.id, file)}
+        onRemovePhoto={() => m.removeGroupPhoto(activeChat.id)}
         onAddMembers={(ids) => m.addMembers(activeChat.id, ids)}
         onRemoveMember={(uid) => m.removeMember(activeChat.id, uid)}
         onOpenDirect={(uid) => startChatWith(uid)}
@@ -518,7 +521,7 @@ const Messenger = () => {
               key={call.id}
               call={call}
               title={callTitle}
-              avatarUser={call.isGroup ? null : m.users[call.peerId]}
+              avatarUser={call.isGroup ? { avatar: callChatObj?.avatar ?? null } : m.users[call.peerId]}
               people={callPeople}
               onAccept={calls.accept}
               onDecline={calls.decline}

@@ -35,6 +35,10 @@ export default {
           "0%": { transform: "scale(1)", opacity: 0.5 },
           "100%": { transform: "scale(2.2)", opacity: 0 },
         },
+        pop: {
+          "0%": { transform: "scale(0.4) rotate(-30deg)", opacity: 0 },
+          "100%": { transform: "scale(1) rotate(0)", opacity: 1 },
+        },
         bar: {
           "0%,100%": { transform: "scaleY(0.35)" },
           "50%": { transform: "scaleY(1)" },
@@ -44,6 +48,7 @@ export default {
         "fade-up": "fade-up .35s ease-out both",
         ring: "ring 2.4s cubic-bezier(.2,.6,.4,1) infinite",
         bar: "bar 1s ease-in-out infinite",
+        pop: "pop .22s cubic-bezier(.2,.8,.3,1.2) both",
       },
     },
   },

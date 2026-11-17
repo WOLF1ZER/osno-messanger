@@ -5,6 +5,7 @@ import Avatar from "../ui/Avatar";
 import MessageBubble from "./MessageBubble";
 import Composer from "./Composer";
 import AudioRecorder from "./AudioRecorder";
+import VideoNoteRecorder from "./VideoNoteRecorder";
 import FileSender from "./FileSender";
 import MessageActions from "./MessageActions";
 import { formatDayLabel, isNewDay } from "../../lib/format";
@@ -12,9 +13,9 @@ import { formatDayLabel, isNewDay } from "../../lib/format";
 /** Unified chat window (replaces the duplicated Inbox / InboxMobile). */
 const Conversation = ({
   chat, user, users, myId, quotes, onNeedQuotes, onReact, ongoingCall, onJoinCall, onBack, onShowInfo, onCall,
-  onSendText, onSendAudio, onSendFiles, onUnblock, onLoadOlder,
+  onSendText, onSendAudio, onSendVideoNote, onSendFiles, onUnblock, onLoadOlder,
 }) => {
-  const [recorderOpen, setRecorderOpen] = useState(false);
+  const [recorder, setRecorder] = useState(null); // null | { mode: "audio" | "video", autoStart }
   const [filesOpen, setFilesOpen] = useState(false);
   const [replyTo, setReplyTo] = useState(null); // message being replied to
   const [actionsFor, setActionsFor] = useState(null); // message whose menu is open
@@ -216,11 +217,22 @@ const Conversation = ({
           onCancelReply={() => setReplyTo(null)}
           onSendText={(text) => onSendText(text, takeReply())}
           onAttach={() => setFilesOpen(true)}
-          onRecord={() => setRecorderOpen(true)}
+          onRecord={(mode, opts) => setRecorder({ mode, autoStart: !!opts?.autoStart })}
         />
       )}
 
-      <AudioRecorder open={recorderOpen} onClose={() => setRecorderOpen(false)} onSend={(audio) => onSendAudio(audio, takeReply())} />
+      <AudioRecorder
+        open={recorder?.mode === "audio"}
+        autoStart={recorder?.autoStart}
+        onClose={() => setRecorder(null)}
+        onSend={(audio) => onSendAudio(audio, takeReply())}
+      />
+      <VideoNoteRecorder
+        open={recorder?.mode === "video"}
+        autoStart={recorder?.autoStart}
+        onClose={() => setRecorder(null)}
+        onSend={(video) => onSendVideoNote?.(video, takeReply())}
+      />
       <FileSender open={filesOpen} onClose={() => setFilesOpen(false)} onSend={(files, caption) => onSendFiles(files, caption, takeReply())} />
       <MessageActions
         message={actionsFor}

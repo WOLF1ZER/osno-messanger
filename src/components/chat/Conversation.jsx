@@ -30,7 +30,7 @@ const Conversation = ({
   return (
     <div className="flex flex-col h-full min-h-0 relative">
       {/* Header */}
-      <header className="shrink-0 flex items-center justify-between gap-3 px-2 sm:px-5 pt-safe h-[calc(72px+env(safe-area-inset-top))] border-b border-white/10 bg-black/60 backdrop-blur-xl z-10">
+      <header className="shrink-0 flex items-center justify-between gap-3 px-2 sm:px-5 pt-safe h-[calc(72px+env(safe-area-inset-top))] border-b border-white/10 bg-black/90 backdrop-blur-xl z-10">
         <div className="flex items-center gap-1 min-w-0">
           <button onClick={onBack} className="icon-btn md:hidden" aria-label="Back to chats">
             <MdOutlineKeyboardArrowLeft size={28} />

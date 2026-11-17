@@ -2,17 +2,8 @@
 //  - the app fills the real screen and the page never scrolls or bounces (only lists inside it do)
 //  - while the on-screen keyboard is open, the app shrinks to the space above it,
 //    so the message box stays visible (iOS Safari doesn't resize the page for it)
-//
-// iOS quirk: an installed (Home Screen) app with a see-through status bar reports a viewport that is
-// one status bar shorter than the screen, so `100dvh` / innerHeight end ~47pt above the bottom.
-// There we use the real screen height instead.
 
 const root = document.documentElement;
-
-const isIOS = () =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const isStandalone = () =>
-  window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
 let probe = null;
 const cssHeight = (unit) => {
@@ -25,15 +16,8 @@ const cssHeight = (unit) => {
   return probe.getBoundingClientRect().height;
 };
 
-/** Height of the whole screen area the app may use. */
-const screenHeight = () => {
-  if (isIOS() && isStandalone()) {
-    const portrait = window.matchMedia?.("(orientation: portrait)").matches ?? true;
-    const s = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-    return Math.max(s, cssHeight("100lvh"), window.innerHeight);
-  }
-  return cssHeight("100dvh") || window.innerHeight;
-};
+/** Height of the whole screen area the app may use (same rule on every platform). */
+const screenHeight = () => cssHeight("100dvh") || window.innerHeight;
 
 let baseGap = null; // screen height minus visualViewport height while no keyboard is shown
 

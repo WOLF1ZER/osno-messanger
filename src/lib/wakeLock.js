@@ -1,38 +1,40 @@
 // Keeps the screen on (no dimming / auto-lock) while `active` — used during calls.
-// Uses the Screen Wake Lock API (Chrome, Edge, Android, Safari 16.4+). Browsers without it get a
-// fallback: a tiny muted, inline video playing in a loop, which also keeps phones awake.
+//  - Screen Wake Lock API where it works (Chrome, Edge, Android, desktop)
+//  - iPhone/iPad: always also play a tiny silent looping video (public/media/keepawake.*),
+//    because installed iOS web apps ignore the wake lock before iOS 18.4 while still
+//    reporting success. This is the same technique the NoSleep library uses.
 import { useEffect } from "react";
 
-const startVideoFallback = () => {
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 2;
-    const ctx = canvas.getContext("2d");
-    const stream = canvas.captureStream?.(1);
-    if (!stream) return () => {};
-    let on = false;
-    const tick = setInterval(() => {
-      on = !on;
-      ctx.fillStyle = on ? "#000" : "#010101";
-      ctx.fillRect(0, 0, 2, 2);
-    }, 1000);
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px";
-    video.srcObject = stream;
-    document.body.appendChild(video);
-    video.play().catch(() => {});
-    return () => {
-      clearInterval(tick);
-      video.pause();
-      video.remove();
-      stream.getTracks().forEach((t) => t.stop());
-    };
-  } catch {
-    return () => {};
+const isIOS = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+const startVideoKeepAwake = () => {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("muted", "");
+  video.setAttribute("aria-hidden", "true");
+  video.style.cssText =
+    "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1";
+  for (const [src, type] of [["/media/keepawake.mp4", "video/mp4"], ["/media/keepawake.webm", "video/webm"]]) {
+    const source = document.createElement("source");
+    source.src = src;
+    source.type = type;
+    video.appendChild(source);
   }
+  document.body.appendChild(video);
+  const play = () => video.play().catch(() => {});
+  play();
+  // iOS pauses it when the app is hidden — start again when it comes back
+  const onVisible = () => document.visibilityState === "visible" && play();
+  document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisible);
+    video.pause();
+    video.remove();
+  };
 };
 
 export const useWakeLock = (active) => {
@@ -44,15 +46,16 @@ export const useWakeLock = (active) => {
 
     const acquire = async () => {
       if (cancelled || document.visibilityState !== "visible") return;
+      if (isIOS() && !stopFallback) stopFallback = startVideoKeepAwake(); // iOS: always
       if ("wakeLock" in navigator) {
         try {
-          lock = await navigator.wakeLock.request("screen");
+          if (!lock || lock.released) lock = await navigator.wakeLock.request("screen");
           return;
         } catch {
           /* not allowed right now (e.g. low battery mode) -> fallback */
         }
       }
-      if (!stopFallback) stopFallback = startVideoFallback();
+      if (!stopFallback) stopFallback = startVideoKeepAwake();
     };
 
     acquire();

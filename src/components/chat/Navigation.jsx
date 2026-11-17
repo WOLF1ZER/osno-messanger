@@ -56,10 +56,10 @@ export const NavRail = ({ view, onChange, me, unread, missed }) => (
  */
 export const MobileTabBar = ({ view, onChange, unread, missed }) => (
   <nav
-    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)-0.75rem))] pointer-events-none"
+    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none"
     aria-label="Main"
   >
-    <div className="pointer-events-auto mx-auto max-w-md grid grid-cols-4 gap-0.5 p-1 rounded-full bg-ink-800/60 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.08)]">
+    <div className="pointer-events-auto mx-auto max-w-md grid grid-cols-4 gap-1 p-1.5 rounded-full bg-ink-800/60 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.08)]">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
         const active = view === id;
         const badge = badgeFor(id, { unread, missed });
@@ -69,19 +69,19 @@ export const MobileTabBar = ({ view, onChange, unread, missed }) => (
             onClick={() => onChange(id)}
             aria-label={label}
             aria-current={active ? "page" : undefined}
-            className={`relative flex flex-col items-center justify-center gap-0.5 h-[52px] rounded-full transition-all duration-300 ${
+            className={`relative flex flex-col items-center justify-center gap-1 h-14 rounded-full transition-all duration-300 ${
               active ? "bg-black/80 text-white shadow-inner ring-1 ring-white/10" : "text-ink-300 active:scale-95"
             }`}
           >
             <span className="relative">
-              <Icon size={20} strokeWidth={active ? 2.4 : 2} />
+              <Icon size={21} strokeWidth={active ? 2.4 : 2} />
               {badge > 0 && (
                 <span className="absolute -top-2 left-3 min-w-[18px] h-[18px] px-1 rounded-full bg-white text-black text-[10px] font-bold grid place-items-center ring-2 ring-ink-900">
                   {badge}
                 </span>
               )}
             </span>
-            <span className="text-[10.5px] leading-none font-semibold tracking-wide">{label}</span>
+            <span className="text-[11px] font-semibold tracking-wide">{label}</span>
           </button>
         );
       })}

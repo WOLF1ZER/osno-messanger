@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { MdPushPin } from "react-icons/md";
 import { FiEdit, FiBellOff } from "react-icons/fi";
+import { IoCheckmark, IoCheckmarkDone } from "react-icons/io5";
 import Avatar from "../ui/Avatar";
 import PanelHeader from "../ui/PanelHeader";
 import SearchField from "../ui/SearchField";
@@ -83,6 +84,11 @@ const ChatList = ({ chats, users, peerOf, activeChatId, onOpen, onNewChat, loadi
                   </div>
                   <div className="flex items-center justify-between gap-3 mt-0.5">
                     <p className={`text-sm truncate ${c.unread ? "text-ink-200" : "text-ink-400"}`}>
+                      {c.last?.sentByMe && c.last.type !== "system" && !c.last.pending && (
+                        <span className="inline-block align-[-2px] mr-1 text-ink-300" aria-label={c.last.read ? "Seen" : "Sent"}>
+                          {c.last.read ? <IoCheckmarkDone size={14} /> : <IoCheckmark size={14} />}
+                        </span>
+                      )}
                       {c.preview.prefix && <span className="text-ink-300">{c.preview.prefix}</span>}
                       {c.preview.text}
                     </p>

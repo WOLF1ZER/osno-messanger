@@ -175,6 +175,12 @@ const Conversation = ({
                 onOpenActions={setActionsFor}
                 onJumpTo={jumpTo}
               />
+              {/* "Seen" under my latest message once the other person (or someone in the group) opened the chat */}
+              {i === chat.messages.length - 1 && m.sentByMe && m.read && (
+                <p className="text-right pr-1 mt-1 text-[11px] text-ink-400 animate-fade-up">
+                  {chat.isGroup ? `Seen by ${m.seenBy}` : "Seen"}
+                </p>
+              )}
             </div>
           );
         })}

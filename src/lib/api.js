@@ -83,6 +83,12 @@ export const getOrCreateDirectChat = async (otherUserId) =>
 
 export const markChatRead = (chatId) => supabase.rpc("mark_chat_read", { p_chat: chatId });
 
+/** Who has read up to when, in these chats: [{ chat_id, user_id, read_at }] */
+export const fetchReadReceipts = async (chatIds) =>
+  chatIds.length
+    ? must(await supabase.from("read_receipts").select("chat_id, user_id, read_at").in("chat_id", chatIds))
+    : [];
+
 export const clearChat = async (chatId) => must(await supabase.rpc("clear_chat", { p_chat: chatId }));
 
 export const setPinned = async (chatId, userId, pinned) =>

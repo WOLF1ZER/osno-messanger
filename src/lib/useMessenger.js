@@ -34,6 +34,7 @@ export const useMessenger = (me) => {
   const [people, setPeople] = useState({}); // id -> user
   const [threads, setThreads] = useState({}); // chatId -> { items, loading, hasMore }
   const [quotes, setQuotes] = useState({}); // messageId -> message (originals of replies that aren't loaded)
+  const [receipts, setReceipts] = useState({}); // chatId -> { userId: readAt (ms) }
   const [online, setOnline] = useState(() => new Set());
   const [loadingChats, setLoadingChats] = useState(true);
   const [error, setError] = useState(null);
@@ -80,6 +81,14 @@ export const useMessenger = (me) => {
       const rows = await api.fetchChats();
       setChats(rows.map((r) => rowToChat(r, myId)).filter((c) => c.isGroup || c.userId));
       addPeople(rows.filter((r) => r.other_id).map(rowToUser));
+      api
+        .fetchReadReceipts(rows.map((r) => r.chat_id))
+        .then((list) => {
+          const next = {};
+          for (const r of list) (next[r.chat_id] ??= {})[r.user_id] = Date.parse(r.read_at);
+          setReceipts(next);
+        })
+        .catch((e) => console.warn("receipts", e));
       ensurePeople(rows.flatMap((r) => r.member_ids ?? []).filter((id) => id !== myId));
     } catch (e) {
       fail(e, "Couldn't load chats");
@@ -91,6 +100,15 @@ export const useMessenger = (me) => {
   useEffect(() => {
     loadChats();
   }, [loadChats]);
+
+  const setReceipt = useCallback((chatId, userId, readAt) => {
+    setReceipts((prev) => ({ ...prev, [chatId]: { ...prev[chatId], [userId]: Date.parse(readAt) } }));
+  }, []);
+
+  /** Mark the open chat as read — only when the app is actually on screen (counts as "seen"). */
+  const markReadIfVisible = useCallback((chatId) => {
+    if (chatId && document.visibilityState === "visible") api.markChatRead(chatId);
+  }, []);
 
   const patchChat = (id, patch) => setChats((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
@@ -149,13 +167,13 @@ export const useMessenger = (me) => {
           upsertMessages(chatId, fresh);
         }
         if (activeIdRef.current === chatId && fresh.some((m) => m.timestamp > lastKnown && !m.sentByMe)) {
-          api.markChatRead(chatId);
+          markReadIfVisible(chatId);
         }
       } catch (e) {
         console.warn("sync failed", e);
       }
     },
-    [myId, upsertMessages],
+    [myId, upsertMessages, markReadIfVisible],
   );
 
   /** Full catch-up: chat list (unread counts) + every chat that's already open in memory. */
@@ -164,8 +182,11 @@ export const useMessenger = (me) => {
     const ids = Object.keys(threadsRef.current);
     const active = activeIdRef.current;
     for (const id of [active, ...ids.filter((x) => x !== active)].filter(Boolean)) await syncThread(id);
-    if (active) patchChat(active, { unread: 0 });
-  }, [loadChats, syncThread]);
+    if (active) {
+      patchChat(active, { unread: 0 });
+      markReadIfVisible(active); // back on screen with this chat open -> it's seen now
+    }
+  }, [loadChats, syncThread, markReadIfVisible]);
 
   const setActiveChat = useCallback(
     (chatId) => {
@@ -174,9 +195,9 @@ export const useMessenger = (me) => {
       if (threadsRef.current[chatId]?.loaded) syncThread(chatId); // reopened: fetch what's new
       else loadMessages(chatId);
       patchChat(chatId, { unread: 0 });
-      api.markChatRead(chatId);
+      markReadIfVisible(chatId);
     },
-    [loadMessages, syncThread],
+    [loadMessages, syncThread, markReadIfVisible],
   );
 
   // catch up whenever the app comes back to the foreground or the network returns,
@@ -406,10 +427,13 @@ export const useMessenger = (me) => {
               : c,
           ),
         );
-        if (isActive && !msg.sentByMe) api.markChatRead(row.chat_id);
+        if (isActive && !msg.sentByMe) markReadIfVisible(row.chat_id);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chats" }, ({ new: row }) => {
         patchChat(row.id, { privateMode: row.private_mode });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "read_receipts" }, ({ new: r }) => {
+        if (r?.chat_id && r.read_at) setReceipt(r.chat_id, r.user_id, r.read_at);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, ({ new: r }) => {
         if (r?.message_id) applyReaction(r.chat_id, r.message_id, r.user_id, r.emoji);
@@ -424,7 +448,7 @@ export const useMessenger = (me) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [myId, loadChats, upsertMessages, ensurePeople, applyReaction, resync]);
+  }, [myId, loadChats, upsertMessages, ensurePeople, applyReaction, resync, setReceipt, markReadIfVisible]);
 
   // ---------------- presence: who is online ----------------
   useEffect(() => {
@@ -460,14 +484,25 @@ export const useMessenger = (me) => {
     () =>
       chats.map((c) => {
         const t = threads[c.id];
+        // read receipts of everyone else in the chat
+        const others = Object.entries(receipts[c.id] ?? {})
+          .filter(([uid]) => uid !== myId)
+          .map(([, at]) => at);
+        const withSeen = (m) => {
+          if (!m?.sentByMe || m.pending || m.failed) return m;
+          const seenBy = others.filter((at) => at >= m.timestamp).length;
+          return seenBy === (m.seenBy ?? 0) && Boolean(seenBy) === Boolean(m.read) ? m : { ...m, seenBy, read: seenBy > 0 };
+        };
+        const items = t?.loaded ? t.items : c.lastMessage ? [c.lastMessage] : [];
         return {
           ...c,
-          messages: t?.loaded ? t.items : c.lastMessage ? [c.lastMessage] : [],
+          lastMessage: withSeen(c.lastMessage),
+          messages: items.map(withSeen),
           loadingMessages: Boolean(t?.loading),
           hasMore: t?.hasMore ?? false,
         };
       }),
-    [chats, threads],
+    [chats, threads, receipts, myId],
   );
 
   // total unread messages in non-muted chats (for the app icon badge)

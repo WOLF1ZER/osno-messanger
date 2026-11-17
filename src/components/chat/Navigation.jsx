@@ -56,7 +56,7 @@ export const NavRail = ({ view, onChange, me, unread, missed }) => (
  */
 export const MobileTabBar = ({ view, onChange, unread, missed }) => (
   <nav
-    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-2 pointer-events-none"
+    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-3 pointer-events-none"
     aria-label="Main"
   >
     <div className="pointer-events-auto mx-auto max-w-md grid grid-cols-4 gap-1 p-1.5 rounded-full bg-ink-800/60 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.08)]">

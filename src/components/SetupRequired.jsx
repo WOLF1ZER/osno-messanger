@@ -37,7 +37,7 @@ VITE_VAPID_PUBLIC_KEY=B...`}
     <div className="h-full overflow-y-auto overflow-x-hidden bg-space relative flex flex-col">
       <div className="absolute inset-0 bg-grid pointer-events-none [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
 
-      <header className="relative z-10 flex items-center gap-3 px-6 sm:px-10 h-20">
+      <header className="relative z-10 flex items-center gap-3 px-6 sm:px-10 pt-safe h-[calc(5rem+env(safe-area-inset-top))] shrink-0">
         <LogoMark className="w-7" />
         <Wordmark className="text-base" />
       </header>

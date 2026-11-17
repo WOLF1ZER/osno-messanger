@@ -86,7 +86,7 @@ const Login = () => {
       <div className="absolute -bottom-[40vh] left-1/2 -translate-x-1/2 w-[160vw] h-[60vh] rounded-[50%] bg-white/[0.04] blur-3xl pointer-events-none" />
 
       {/* Top bar */}
-      <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 h-20">
+      <header className="relative z-10 flex items-center justify-between px-6 sm:px-10 pt-safe h-[calc(5rem+env(safe-area-inset-top))] shrink-0">
         <div className="flex items-center gap-3">
           <LogoMark className="w-7" />
           <Wordmark className="text-base" />

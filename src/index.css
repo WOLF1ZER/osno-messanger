@@ -24,13 +24,10 @@
   }
   #root {
     /* visible height (shrinks when the on-screen keyboard opens) — set by src/lib/viewport.js */
+    /* full screen; only while the on-screen keyboard is open does src/lib/viewport.js shrink it */
     height: var(--app-height, 100dvh);
     width: 100%;
     overflow: hidden;
-    box-sizing: border-box;
-    /* installed app on iPhone: the status bar is see-through, so the app's background continues
-       behind the clock/battery and the content starts just below the notch / Dynamic Island */
-    padding-top: env(safe-area-inset-top);
     background:
       radial-gradient(1200px 600px at 80% -10%, rgba(255, 255, 255, 0.07), transparent 60%),
       radial-gradient(900px 500px at -10% 110%, rgba(255, 255, 255, 0.05), transparent 60%),
@@ -131,8 +128,13 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  /* bottom bars: sit just above the iPhone home indicator (not a full indicator-height above it) */
   .pb-safe {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom) - 0.5rem));
+  }
+  /* top bars extend behind the see-through iPhone status bar, so it has the same colour as the bar */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
   }
   .logo-mono {
     filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.08));

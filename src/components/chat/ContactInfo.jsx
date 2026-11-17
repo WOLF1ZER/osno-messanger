@@ -21,7 +21,7 @@ const ContactInfo = ({ chat, user, onClose, onCall, onTogglePin, onToggleMute, o
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden">
-      <div className="flex items-center justify-between px-5 h-[72px] border-b border-white/10">
+      <div className="flex items-center justify-between px-5 pt-safe h-[calc(72px+env(safe-area-inset-top))] border-b border-white/10">
         <p className="label text-white">Contact info</p>
         <button onClick={onClose} className="icon-btn -mr-2" aria-label="Close">
           <IoClose size={20} />

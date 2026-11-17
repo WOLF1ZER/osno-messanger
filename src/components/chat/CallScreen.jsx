@@ -145,7 +145,7 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
 
   return (
     <motion.div
-      className="fixed inset-0 z-[200] bg-space flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+      className="fixed top-0 inset-x-0 h-[var(--screen-height,100dvh)] z-[200] bg-space flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

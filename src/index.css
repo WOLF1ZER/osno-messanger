@@ -15,17 +15,20 @@
   }
   body {
     @apply bg-black text-ink-100 font-sans antialiased;
+    /* pinned to the top-left and exactly one real screen tall (see src/lib/viewport.js) */
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--screen-height, 100dvh);
     width: 100%;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     touch-action: manipulation; /* no double-tap zoom */
   }
   #root {
-    /* visible height (shrinks when the on-screen keyboard opens) — set by src/lib/viewport.js */
     /* full screen; only while the on-screen keyboard is open does src/lib/viewport.js shrink it */
-    height: var(--app-height, 100dvh);
+    height: var(--app-height, var(--screen-height, 100dvh));
     width: 100%;
     overflow: hidden;
     background:

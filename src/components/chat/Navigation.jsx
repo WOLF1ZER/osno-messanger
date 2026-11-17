@@ -14,7 +14,7 @@ const badgeFor = (id, { unread, missed }) => (id === "chats" ? unread : id === "
 
 /** Vertical glass rail for tablet / desktop. */
 export const NavRail = ({ view, onChange, me, unread, missed }) => (
-  <nav className="hidden md:flex flex-col items-center w-[76px] shrink-0 h-full py-6 border-r border-white/10 bg-white/[0.02] backdrop-blur-xl">
+  <nav className="hidden md:flex flex-col items-center w-[76px] shrink-0 h-full py-4 border-r border-white/10 bg-white/[0.02] backdrop-blur-xl">
     <LogoMark className="w-9 mb-10" />
 
     <div className="flex flex-col items-center gap-2 flex-1">

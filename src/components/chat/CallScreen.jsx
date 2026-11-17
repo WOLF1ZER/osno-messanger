@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { FiMic, FiMicOff, FiVolume2, FiVolumeX, FiPhoneOff, FiPhone, FiVideo, FiVideoOff, FiUsers } from "react-icons/fi";
+import { FiMic, FiMicOff, FiVolume2, FiPhoneOff, FiPhone, FiVideo, FiVideoOff, FiUsers, FiMessageSquare, FiRefreshCw, FiSmartphone, FiMaximize2 } from "react-icons/fi";
 import { playEndTone, startRingback, startRingtone, unlockAudio } from "../../lib/sounds";
 import Avatar from "../ui/Avatar";
 import DisplayName from "../ui/DisplayName";
@@ -56,14 +57,14 @@ const VideoView = ({ track, mirror, className = "" }) => {
 };
 
 /** One person in a group call grid. */
-const Tile = ({ p, profile }) => (
+const Tile = ({ p, profile, mirror }) => (
   <div
     className={`relative overflow-hidden rounded-2xl bg-white/[0.04] border transition-colors duration-200 grid place-items-center min-h-0 ${
       p.speaking ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.6)]" : "border-white/10"
     }`}
   >
     {p.videoTrack ? (
-      <VideoView track={p.videoTrack} mirror={p.isLocal} className="absolute inset-0 w-full h-full object-cover" />
+      <VideoView track={p.videoTrack} mirror={mirror} className="absolute inset-0 w-full h-full object-cover" />
     ) : (
       <div className="pb-6">
         <Avatar name={profile?.name ?? p.name} src={profile?.avatar} size="md" className="sm:hidden" />
@@ -90,7 +91,29 @@ const gridClass = (n) =>
  * Full-screen call UI: incoming ring, outgoing ring and the live call.
  * 1:1 calls show the other person full screen; group calls show a grid of everyone (max 5).
  */
-const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHangUp }) => {
+/** Slim bar shown at the top of the app while the call is minimized (tap to go back to the call). */
+const MiniCallBar = ({ title, status, micOn, onToggleMic, onExpand, onHangUp }) => (
+  <div className="flex items-center gap-2 h-12 pl-4 pr-2 bg-white text-black animate-fade-up">
+    <button onClick={onExpand} className="flex-1 min-w-0 flex items-center gap-2 text-left h-full" aria-label="Back to the call">
+      <span className="relative flex w-2.5 h-2.5 shrink-0">
+        <span className="absolute inset-0 rounded-full bg-black animate-ping opacity-60" />
+        <span className="relative w-2.5 h-2.5 rounded-full bg-black" />
+      </span>
+      <span className="text-sm font-semibold truncate">{title}</span>
+      <span className="text-sm tabular-nums text-black/60 shrink-0">{status}</span>
+      <FiMaximize2 size={14} className="shrink-0 text-black/50" />
+    </button>
+    <button onClick={onToggleMic} aria-label={micOn ? "Mute" : "Unmute"} className="w-9 h-9 rounded-full grid place-items-center hover:bg-black/10">
+      {micOn ? <FiMic size={17} /> : <FiMicOff size={17} />}
+    </button>
+    <button onClick={onHangUp} aria-label="End call" className="w-9 h-9 rounded-full grid place-items-center bg-black text-white">
+      <FiPhoneOff size={16} />
+    </button>
+  </div>
+);
+
+const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHangUp, onOpenChat }) => {
+  const [minimized, setMinimized] = useState(false);
   const incomingRinging = call.direction === "incoming" && call.status === "ringing";
   const inRoom = call.direction === "outgoing" || call.status === "active";
   const lk = useLiveKitRoom({ callId: call.id, enabled: inRoom, video: call.video });
@@ -140,14 +163,37 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
           : "Connecting…"
         : formatDuration((now - (startedAt ?? now)) / 1000);
 
+  // "Chat" button: keep talking, shrink the call to a bar, open its chat
+  const openChat = () => {
+    setMinimized(true);
+    onOpenChat?.(call.chatId);
+  };
+  const barSlot = typeof document !== "undefined" ? document.getElementById("call-bar-slot") : null;
+
   const showGrid = call.isGroup && inRoom && lk.state === "connected" && live;
   const remote = lk.remotes[0];
   const showRemoteVideo = !call.isGroup && Boolean(remote?.videoTrack);
   const compactHeader = showGrid || showRemoteVideo;
 
   return (
+    <>
+    {minimized && barSlot &&
+      createPortal(
+        <MiniCallBar
+          title={title}
+          status={statusText}
+          micOn={lk.micOn}
+          onToggleMic={lk.toggleMic}
+          onExpand={() => setMinimized(false)}
+          onHangUp={onHangUp}
+        />,
+        barSlot,
+      )}
     <motion.div
-      className="fixed top-0 inset-x-0 h-[var(--screen-height,100dvh)] z-[200] bg-space flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+      className={`fixed top-0 inset-x-0 h-[var(--screen-height,100dvh)] z-[200] bg-space flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ${
+        minimized ? "invisible pointer-events-none" : ""
+      }`}
+      aria-hidden={minimized || undefined}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -166,19 +212,42 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
       )}
       {!showRemoteVideo && <div className="absolute inset-0 bg-grid opacity-60 pointer-events-none" />}
 
-      {/* 1:1: my camera, picture-in-picture */}
+      {/* 1:1: my camera, picture-in-picture (mirrored only for the front camera) */}
       {!call.isGroup && lk.local?.videoTrack && (
         <VideoView
           track={lk.local.videoTrack}
-          mirror
-          className="absolute top-[calc(env(safe-area-inset-top)+1.5rem)] right-6 z-10 w-28 sm:w-44 aspect-[3/4] object-cover rounded-2xl border border-white/20 shadow-2xl"
+          mirror={lk.facing === "user"}
+          className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] right-4 z-10 w-28 sm:w-44 aspect-[3/4] object-cover rounded-2xl border border-white/20 shadow-2xl"
         />
+      )}
+
+      {/* top bar: open the chat during the call / flip camera */}
+      {!incomingRinging && (
+        <div className="absolute top-[calc(env(safe-area-inset-top)+0.75rem)] inset-x-3 z-20 flex items-center justify-between pointer-events-none">
+          <button
+            onClick={openChat}
+            className="pointer-events-auto h-10 pl-3 pr-4 rounded-full flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/15 text-white text-sm"
+            aria-label="Open chat during the call"
+          >
+            <FiMessageSquare size={16} /> Chat
+          </button>
+          {lk.camOn && lk.canFlip && (
+            <button
+              onClick={lk.flipCamera}
+              className="pointer-events-auto w-10 h-10 rounded-full grid place-items-center bg-black/40 backdrop-blur-md border border-white/15 text-white"
+              aria-label={lk.facing === "user" ? "Switch to back camera" : "Switch to front camera"}
+              title="Switch camera"
+            >
+              <FiRefreshCw size={16} />
+            </button>
+          )}
+        </div>
       )}
 
       {/* header / ringing view */}
       <div
         className={`relative flex flex-col items-center px-6 text-center ${
-          compactHeader ? "shrink-0 pt-6 pb-4" : `flex-1 min-h-0 py-6 justify-center overflow-hidden`
+          compactHeader ? "shrink-0 pt-16 pb-4" : `flex-1 min-h-0 py-6 justify-center overflow-hidden`
         }`}
       >
         <p className={`eyebrow ${compactHeader ? "mb-2" : `mb-6 ${T}mb-10`} flex items-center gap-2`}>
@@ -227,7 +296,7 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
       {showGrid && (
         <div className={`relative flex-1 min-h-0 grid ${gridClass(lk.participants.length)} auto-rows-fr gap-2 sm:gap-3 px-3 sm:px-6`}>
           {lk.participants.map((p) => (
-            <Tile key={p.id} p={p} profile={people[p.id]} />
+            <Tile key={p.id} p={p} profile={people[p.id]} mirror={p.isLocal && lk.facing === "user"} />
           ))}
         </div>
       )}
@@ -259,13 +328,14 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
             <RoundAction onClick={onHangUp} label={call.isGroup ? "Leave" : "End"} filled>
               <FiPhoneOff size={26} />
             </RoundAction>
-            <Control active={!lk.speakerOn} onClick={lk.toggleSpeaker} label={lk.speakerOn ? "Speaker" : "Muted"}>
-              {lk.speakerOn ? <FiVolume2 size={22} /> : <FiVolumeX size={22} />}
+            <Control active={lk.output === "speaker"} onClick={lk.toggleOutput} label={lk.output === "speaker" ? "Speaker" : "Phone"}>
+              {lk.output === "speaker" ? <FiVolume2 size={22} /> : <FiSmartphone size={22} />}
             </Control>
           </>
         )}
       </div>
     </motion.div>
+    </>
   );
 };
 

@@ -444,7 +444,10 @@ const Messenger = () => {
   const callPeople = useMemo(() => ({ ...m.users, [me.id]: me }), [m.users, me]);
 
   return (
-    <div className="h-full w-full flex bg-space text-ink-100 overflow-hidden">
+    <div className="h-full w-full flex flex-col bg-space text-ink-100 overflow-hidden">
+      {/* a minimized call shows its bar here (rendered by CallScreen) */}
+      <div id="call-bar-slot" className="shrink-0 relative z-[60]" />
+      <div className="flex-1 min-h-0 w-full flex">
       <NavRail view={view} onChange={changeView} me={me} unread={totalUnread} missed={calls.missedCount} />
 
       {/* Side column (tablet+) / main screen (phone when no chat open) */}
@@ -520,10 +523,15 @@ const Messenger = () => {
               onAccept={calls.accept}
               onDecline={calls.decline}
               onHangUp={calls.hangUp}
+              onOpenChat={(chatId) => {
+                setView("chats");
+                openChat(chatId);
+              }}
             />
           </Suspense>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 };

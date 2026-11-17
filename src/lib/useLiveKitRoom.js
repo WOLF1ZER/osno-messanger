@@ -33,6 +33,11 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
   const [error, setError] = useState(null);
   const [audioBlocked, setAudioBlocked] = useState(false); // browser autoplay policy blocked call sound
   const speakerOnRef = useRef(true);
+  // where the other person's voice plays: "speaker" (loud) or "ear" (earpiece / quiet, for holding to the ear)
+  const [output, setOutput] = useState(video ? "speaker" : "ear");
+  const outputRef = useRef(output);
+  const [facing, setFacing] = useState("user"); // front ("user") or back ("environment") camera
+  const [canFlip, setCanFlip] = useState(false);
 
   useEffect(() => {
     if (!enabled || !callId) return;
@@ -68,6 +73,7 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
           el.setAttribute("playsinline", "");
           el.muted = !speakerOnRef.current;
           (audioContainerRef.current ?? document.body).appendChild(el);
+          applyOutput(outputRef.current, [el]);
           // phones/Safari block sound that wasn't started by a tap -> ask the user to tap
           el.play?.().catch(() => !cancelled && setAudioBlocked(true));
         }
@@ -100,8 +106,10 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
         // unlock playback of remote audio (works when the browser still counts the user's tap)
         await room.startAudio().catch(() => {});
         if (!cancelled) setAudioBlocked(!room.canPlaybackAudio);
+        applyOutput(outputRef.current);
         await room.localParticipant.setMicrophoneEnabled(true);
-        if (video) await room.localParticipant.setCameraEnabled(true);
+        if (video) await room.localParticipant.setCameraEnabled(true, { facingMode: "user" });
+        detectCameras();
         setState("connected");
         refresh();
       } catch (e) {
@@ -119,7 +127,77 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
       roomRef.current = null;
       container?.querySelectorAll("audio").forEach((a) => a.remove());
     };
+    // applyOutput / detectCameras are stable callbacks (no deps) defined below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callId, enabled, video]);
+
+  /** Is there more than one camera (front + back)? Labels are only known after permission. */
+  const detectCameras = useCallback(async () => {
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+      setCanFlip(cams.length > 1 || window.matchMedia?.("(pointer: coarse)").matches);
+    } catch {
+      setCanFlip(false);
+    }
+  }, []);
+
+  /**
+   * Route the other person's voice to the loudspeaker or the earpiece.
+   * Browsers expose this differently, so we use what's available:
+   *  - iPhone/iPad (Safari 16.4+): the Audio Session API ("play-and-record" = phone-call style routing)
+   *  - Android / desktop Chrome: an "earpiece"/"receiver" output via setSinkId, if the browser lists one
+   *  - otherwise: play it much quieter in "ear" mode, so it's comfortable when held to the ear
+   */
+  const applyOutput = useCallback(async (mode, els) => {
+    const audios = els ?? [...(audioContainerRef.current?.querySelectorAll("audio") ?? [])];
+    let routed = false;
+    try {
+      if (navigator.audioSession) {
+        navigator.audioSession.type = mode === "ear" ? "play-and-record" : "auto";
+        routed = mode === "ear";
+      }
+    } catch {
+      /* not supported */
+    }
+    try {
+      const canSink = audios.length && typeof audios[0].setSinkId === "function";
+      if (canSink) {
+        const outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+        const pick =
+          mode === "ear"
+            ? outs.find((d) => /earpiece|receiver|handset|phone/i.test(d.label))
+            : outs.find((d) => /speaker/i.test(d.label)) ?? outs.find((d) => d.deviceId === "default");
+        if (pick) {
+          await Promise.all(audios.map((a) => a.setSinkId(pick.deviceId).catch(() => {})));
+          if (mode === "ear" && /earpiece|receiver|handset|phone/i.test(pick.label)) routed = true;
+        }
+      }
+    } catch {
+      /* not supported */
+    }
+    // no real earpiece routing available -> quieter playback (iOS ignores volume, but routes above)
+    audios.forEach((a) => (a.volume = mode === "ear" && !routed ? 0.3 : 1));
+  }, []);
+
+  const toggleOutput = useCallback(() => {
+    const next = outputRef.current === "ear" ? "speaker" : "ear";
+    outputRef.current = next;
+    setOutput(next);
+    applyOutput(next);
+  }, [applyOutput]);
+
+  /** Switch between the front and back camera. */
+  const flipCamera = useCallback(async () => {
+    const next = facing === "user" ? "environment" : "user";
+    const lp = roomRef.current?.localParticipant;
+    const track = lp?.getTrackPublication(Track.Source.Camera)?.videoTrack;
+    try {
+      if (track) await track.restartTrack({ facingMode: next });
+      setFacing(next);
+    } catch (e) {
+      setError(e.message || "Couldn't switch camera");
+    }
+  }, [facing]);
 
   /** Called from the "Tap to turn on sound" button (a real tap, so the browser allows playback). */
   const enableAudio = useCallback(async () => {
@@ -145,12 +223,13 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
     const next = !camOn;
     setCamOn(next);
     try {
-      await roomRef.current?.localParticipant.setCameraEnabled(next);
+      await roomRef.current?.localParticipant.setCameraEnabled(next, { facingMode: facing });
+      if (next) detectCameras();
     } catch (e) {
       setCamOn(!next);
       setError(e.name === "NotAllowedError" ? "Camera permission was denied." : e.message);
     }
-  }, [camOn]);
+  }, [camOn, facing, detectCameras]);
 
   const toggleSpeaker = useCallback(() => {
     const next = !speakerOn;
@@ -165,8 +244,8 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
   return {
     state, error, participants, remotes, local,
     peerJoined: remotes.length > 0,
-    micOn, camOn, speakerOn, audioBlocked,
-    toggleMic, toggleCam, toggleSpeaker, enableAudio,
+    micOn, camOn, speakerOn, audioBlocked, output, facing, canFlip,
+    toggleMic, toggleCam, toggleSpeaker, toggleOutput, flipCamera, enableAudio,
     audioContainerRef,
   };
 };

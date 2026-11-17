@@ -29,6 +29,7 @@ const json = (body: unknown, status = 200) =>
 const preview = (m: { type: string; body: string | null; file_name: string | null }) => {
   if (m.type === "image") return "📷 Photo" + (m.body ? ` · ${m.body}` : "");
   if (m.type === "audio") return "🎤 Voice message";
+  if (m.type === "video") return "⭕ Video message";
   if (m.type === "file") return `📎 ${m.file_name ?? "File"}`;
   const t = (m.body ?? "").replace(/\s+/g, " ").trim();
   return t.length > 140 ? t.slice(0, 137) + "…" : t;
@@ -67,7 +68,7 @@ async function onMessage(id: string) {
   if (Date.now() - Date.parse(m.created_at) > 5 * 60_000) return { skipped: "old" };
 
   const [{ data: chat }, { data: sender }, { data: members }] = await Promise.all([
-    admin.from("chats").select("id, is_group, title, private_mode").eq("id", m.chat_id).single(),
+    admin.from("chats").select("id, is_group, title, private_mode, avatar_url").eq("id", m.chat_id).single(),
     admin.from("profiles").select("name, avatar_url").eq("id", m.sender_id).single(),
     admin.from("chat_members").select("user_id, muted").eq("chat_id", m.chat_id),
   ]);
@@ -83,7 +84,8 @@ async function onMessage(id: string) {
       body: chat?.is_group ? `${who}: ${text}` : text,
       tag: `chat-${m.chat_id}`,
       url: `/?chat=${m.chat_id}`,
-      icon: sender?.avatar_url ?? undefined,
+      // groups show the group photo (if set), 1:1 chats show the sender's photo
+      icon: (chat?.is_group ? chat.avatar_url ?? sender?.avatar_url : sender?.avatar_url) ?? undefined,
     },
     60 * 60 * 24,
   );
@@ -94,7 +96,7 @@ async function onCall(id: string) {
   if (!c || c.status !== "ringing") return { skipped: "not ringing" };
 
   const [{ data: chat }, { data: caller }, { data: members }] = await Promise.all([
-    admin.from("chats").select("id, is_group, title").eq("id", c.chat_id).single(),
+    admin.from("chats").select("id, is_group, title, avatar_url").eq("id", c.chat_id).single(),
     admin.from("profiles").select("name, avatar_url").eq("id", c.caller_id).single(),
     admin.from("chat_members").select("user_id, muted").eq("chat_id", c.chat_id),
   ]);
@@ -113,7 +115,7 @@ async function onCall(id: string) {
       body: c.is_group ? `${who} started a ${kind} call — tap to join` : `Incoming ${kind} call`,
       tag: `call-${c.id}`,
       url: `/?call=${c.id}`,
-      icon: caller?.avatar_url ?? undefined,
+      icon: (c.is_group ? chat?.avatar_url ?? caller?.avatar_url : caller?.avatar_url) ?? undefined,
     },
     45, // a call notification is useless after it stops ringing
   );

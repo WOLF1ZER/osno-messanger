@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { FiMic, FiMicOff, FiVolume2, FiVolumeX, FiPhoneOff, FiPhone, FiVideo, FiVideoOff, FiUsers } from "react-icons/fi";
+import { playEndTone, startRingback, startRingtone, unlockAudio } from "../../lib/sounds";
 import Avatar from "../ui/Avatar";
 import DisplayName from "../ui/DisplayName";
 import { useLiveKitRoom } from "../../lib/useLiveKitRoom";
@@ -111,6 +112,19 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
     return () => window.removeEventListener("keydown", onKey);
   }, [incomingRinging, onDecline, onHangUp]);
 
+  // ringtone (incoming) / ringback (outgoing, until someone picks up)
+  const outgoingRinging = call.direction === "outgoing" && !live;
+  useEffect(() => {
+    if (incomingRinging) return startRingtone();
+    if (outgoingRinging) return startRingback();
+  }, [incomingRinging, outgoingRinging]);
+  useEffect(() => () => playEndTone(), []); // short tone when the call screen closes
+
+  const accept = () => {
+    unlockAudio(); // this tap lets the browser play the other person's voice
+    onAccept();
+  };
+
   const caller = people[call.peerId];
   const statusText = incomingRinging
     ? call.isGroup
@@ -131,14 +145,15 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
 
   return (
     <motion.div
-      className="fixed inset-0 z-[200] bg-space flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[200] bg-space flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       role="dialog"
       aria-label={`Call with ${title}`}
     >
-      <div ref={lk.audioContainerRef} className="hidden" />
+      {/* remote voices play here (visually hidden, but not display:none) */}
+      <div ref={lk.audioContainerRef} className="sr-only" aria-hidden="true" />
 
       {/* 1:1: other person's video fills the screen */}
       {showRemoteVideo && (
@@ -154,7 +169,7 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
         <VideoView
           track={lk.local.videoTrack}
           mirror
-          className="absolute top-6 right-6 z-10 w-28 sm:w-44 aspect-[3/4] object-cover rounded-2xl border border-white/20 shadow-2xl"
+          className="absolute top-[calc(env(safe-area-inset-top)+1.5rem)] right-6 z-10 w-28 sm:w-44 aspect-[3/4] object-cover rounded-2xl border border-white/20 shadow-2xl"
         />
       )}
 
@@ -193,6 +208,17 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
           {statusText}
         </p>
         {lk.error && <p className="mt-4 max-w-sm text-sm text-ink-200 border border-white/20 px-4 py-2">{lk.error}</p>}
+        {inRoom && lk.audioBlocked && (
+          <button
+            onClick={() => {
+              unlockAudio();
+              lk.enableAudio();
+            }}
+            className="mt-5 inline-flex items-center gap-2 h-11 px-5 rounded-full bg-white text-black font-display uppercase tracking-wider2 text-[12px] font-semibold animate-pulse"
+          >
+            <FiVolume2 size={16} /> Tap to turn on sound
+          </button>
+        )}
       </div>
 
       {/* group grid */}
@@ -212,7 +238,7 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
             <RoundAction onClick={onDecline} label="Decline">
               <FiPhoneOff size={26} />
             </RoundAction>
-            <RoundAction onClick={onAccept} label={call.isGroup ? "Join" : "Accept"} filled>
+            <RoundAction onClick={accept} label={call.isGroup ? "Join" : "Accept"} filled>
               {call.video ? <FiVideo size={26} /> : <FiPhone size={26} />}
             </RoundAction>
           </>

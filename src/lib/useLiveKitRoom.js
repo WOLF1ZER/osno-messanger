@@ -31,6 +31,7 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
   const [camOn, setCamOn] = useState(video);
   const [speakerOn, setSpeakerOn] = useState(true);
   const [error, setError] = useState(null);
+  const [audioBlocked, setAudioBlocked] = useState(false); // browser autoplay policy blocked call sound
   const speakerOnRef = useRef(true);
 
   useEffect(() => {
@@ -42,7 +43,12 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
     }
     let cancelled = false;
     let speakers = new Set();
-    const room = new Room({ adaptiveStream: true, dynacast: true });
+    const container = audioContainerRef.current;
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     roomRef.current = room;
 
     const refresh = () => {
@@ -56,9 +62,14 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
     room
       .on(RoomEvent.TrackSubscribed, (track) => {
         if (track.kind === Track.Kind.Audio) {
+          // play the other person's voice through an <audio> element
           const el = track.attach();
+          el.autoplay = true;
+          el.setAttribute("playsinline", "");
           el.muted = !speakerOnRef.current;
-          audioContainerRef.current?.appendChild(el);
+          (audioContainerRef.current ?? document.body).appendChild(el);
+          // phones/Safari block sound that wasn't started by a tap -> ask the user to tap
+          el.play?.().catch(() => !cancelled && setAudioBlocked(true));
         }
         refresh();
       })
@@ -76,6 +87,7 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
         speakers = new Set(list.map((p) => p.identity));
         refresh();
       })
+      .on(RoomEvent.AudioPlaybackStatusChanged, () => !cancelled && setAudioBlocked(!room.canPlaybackAudio))
       .on(RoomEvent.Disconnected, () => !cancelled && setState("idle"));
 
     (async () => {
@@ -85,6 +97,9 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
         if (cancelled) return;
         await room.connect(LIVEKIT_URL, token);
         if (cancelled) return room.disconnect();
+        // unlock playback of remote audio (works when the browser still counts the user's tap)
+        await room.startAudio().catch(() => {});
+        if (!cancelled) setAudioBlocked(!room.canPlaybackAudio);
         await room.localParticipant.setMicrophoneEnabled(true);
         if (video) await room.localParticipant.setCameraEnabled(true);
         setState("connected");
@@ -102,8 +117,23 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
       cancelled = true;
       room.disconnect();
       roomRef.current = null;
+      container?.querySelectorAll("audio").forEach((a) => a.remove());
     };
   }, [callId, enabled, video]);
+
+  /** Called from the "Tap to turn on sound" button (a real tap, so the browser allows playback). */
+  const enableAudio = useCallback(async () => {
+    const room = roomRef.current;
+    try {
+      await room?.startAudio();
+      await Promise.all(
+        [...(audioContainerRef.current?.querySelectorAll("audio") ?? [])].map((a) => a.play().catch(() => {})),
+      );
+      setAudioBlocked(room ? !room.canPlaybackAudio : false);
+    } catch (e) {
+      console.warn("enableAudio failed", e);
+    }
+  }, []);
 
   const toggleMic = useCallback(async () => {
     const next = !micOn;
@@ -135,8 +165,8 @@ export const useLiveKitRoom = ({ callId, enabled, video }) => {
   return {
     state, error, participants, remotes, local,
     peerJoined: remotes.length > 0,
-    micOn, camOn, speakerOn,
-    toggleMic, toggleCam, toggleSpeaker,
+    micOn, camOn, speakerOn, audioBlocked,
+    toggleMic, toggleCam, toggleSpeaker, enableAudio,
     audioContainerRef,
   };
 };

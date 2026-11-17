@@ -75,7 +75,7 @@ const GroupInfo = ({
         <Avatar name={chat.title} size="2xl" group />
         {editing ? (
           <form onSubmit={saveTitle} className="mt-6 w-full flex gap-2">
-            <input autoFocus maxLength={64} value={title} onChange={(e) => setTitle(e.target.value)} className="field" aria-label="Group name" />
+            <input autoFocus maxLength={64} value={title} onChange={(e) => setTitle(e.target.value)} className="field min-w-0" aria-label="Group name" />
             <button type="submit" className="icon-btn border border-white/20 w-12 h-12 shrink-0" aria-label="Save name">
               <FiCheck size={18} />
             </button>

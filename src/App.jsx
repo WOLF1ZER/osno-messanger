@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { isSupabaseConfigured } from "./lib/supabase";
 
 const Splash = () => (
-  <div className="h-[100dvh] bg-space grid place-items-center">
+  <div className="h-full bg-space grid place-items-center">
     <LogoMark className="w-14 animate-pulse" />
   </div>
 );

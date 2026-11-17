@@ -80,7 +80,7 @@ const Login = () => {
   if (session) return <Navigate to="/" replace />;
 
   return (
-    <div className="min-h-[100dvh] w-full bg-space relative overflow-hidden flex flex-col">
+    <div className="h-full w-full bg-space relative overflow-y-auto overflow-x-hidden flex flex-col">
       <div className="absolute inset-0 bg-grid pointer-events-none [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
       {/* horizon glow */}
       <div className="absolute -bottom-[40vh] left-1/2 -translate-x-1/2 w-[160vw] h-[60vh] rounded-[50%] bg-white/[0.04] blur-3xl pointer-events-none" />

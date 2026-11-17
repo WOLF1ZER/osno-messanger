@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as api from "./api";
 import { formatLastSeen, uuid } from "./format";
+import { playMessagePing } from "./sounds";
 
 const rowToChat = (r, myId) => ({
   id: r.chat_id,
@@ -289,6 +290,9 @@ export const useMessenger = (me) => {
         if (msg.type === "system") loadChats(); // members or title changed
         else ensurePeople([row.sender_id]);
         const counts = !msg.sentByMe && msg.type !== "system";
+        // soft ping while the app is on screen (when it's closed, push notifications take over)
+        const chatMuted = chatsRef.current.find((c) => c.id === row.chat_id)?.muted;
+        if (counts && !chatMuted && document.visibilityState === "visible") playMessagePing();
         const isActive = activeIdRef.current === row.chat_id;
         setChats((list) =>
           list.map((c) =>

@@ -6,14 +6,47 @@
   :root {
     color-scheme: dark;
   }
+  /* App-like page: the document never scrolls, bounces or pans sideways — only lists inside it scroll. */
   html,
-  body,
-  #root {
+  body {
     height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
   body {
     @apply bg-black text-ink-100 font-sans antialiased;
+    position: fixed;
+    inset: 0;
+    width: 100%;
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation; /* no double-tap zoom */
+  }
+  #root {
+    /* visible height (shrinks when the on-screen keyboard opens) — set by src/lib/viewport.js */
+    height: var(--app-height, 100dvh);
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    /* installed app on iPhone: the status bar is see-through, so the app's background continues
+       behind the clock/battery and the content starts just below the notch / Dynamic Island */
+    padding-top: env(safe-area-inset-top);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(255, 255, 255, 0.07), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255, 255, 255, 0.05), transparent 60%),
+      #000;
+  }
+  /* pages inside #root use its background, so there's no seam under the status bar */
+  #root > .bg-space {
+    background: transparent;
+  }
+  /* iPhone zooms into inputs smaller than 16px — keep them at 16px on phones */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
   }
   ::selection {
     @apply bg-white text-black;
@@ -130,4 +163,11 @@
   --epr-highlight-color: #fff !important;
   --epr-search-border-color: rgba(255, 255, 255, 0.5) !important;
   --epr-picker-border-radius: 0 !important;
+}
+
+/* Lists scroll vertically only: never sideways, and their bounce doesn't move the page. */
+.overflow-y-auto {
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }

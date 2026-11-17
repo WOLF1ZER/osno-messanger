@@ -17,6 +17,7 @@ import { useMessenger } from "../lib/useMessenger";
 import { useCalls } from "../lib/useCalls";
 import { enablePush, forgetPushOnLogout, getPushState, refreshPushSubscription } from "../lib/push";
 import * as api from "../lib/api";
+import { unlockAudio } from "../lib/sounds";
 
 // LiveKit is large: load the call screen only when a call happens.
 const CallScreen = lazy(() => import("./chat/CallScreen"));
@@ -176,10 +177,17 @@ const Messenger = () => {
   };
 
   // ---------- calls ----------
-  const callChat = (chat, video = false) =>
-    calls.startCall({ chatId: chat.id, peerId: chat.userId, video, isGroup: chat.isGroup });
+  const callChat = (chat, video = false) => {
+    unlockAudio(); // the tap on the call button lets the browser play call audio later
+    return calls.startCall({ chatId: chat.id, peerId: chat.userId, video, isGroup: chat.isGroup });
+  };
+  const joinOngoing = (c) => {
+    unlockAudio();
+    return calls.joinOngoing(c);
+  };
 
   const callFromHistory = async (c, video) => {
+    unlockAudio();
     if (c.isGroup) return chatsById[c.chatId] && callChat(chatsById[c.chatId], video);
     const chatId = m.chats.find((x) => x.userId === c.userId)?.id ?? (await m.startChatWith(c.userId));
     if (chatId) calls.startCall({ chatId, peerId: c.userId, video });
@@ -299,7 +307,7 @@ const Messenger = () => {
             chatsById={chatsById}
             onCall={callFromHistory}
             onOpenChat={openFromHistory}
-            onJoin={calls.joinOngoing}
+            onJoin={joinOngoing}
           />
         )}
         {view === "search" && (
@@ -334,7 +342,7 @@ const Messenger = () => {
       user={activePeer}
       users={m.users}
       ongoingCall={calls.ongoingByChat[activeChat.id]}
-      onJoinCall={calls.joinOngoing}
+      onJoinCall={joinOngoing}
       onBack={closeChat}
       onShowInfo={() => setInfoOpen((v) => !v)}
       onCall={(video) => callChat(activeChat, video)}
@@ -403,12 +411,12 @@ const Messenger = () => {
   const callPeople = useMemo(() => ({ ...m.users, [me.id]: me }), [m.users, me]);
 
   return (
-    <div className="h-[100dvh] w-full flex bg-space text-ink-100 overflow-hidden">
+    <div className="h-full w-full flex bg-space text-ink-100 overflow-hidden">
       <NavRail view={view} onChange={changeView} me={me} unread={totalUnread} missed={calls.missedCount} />
 
       {/* Side column (tablet+) / main screen (phone when no chat open) */}
       <section
-        className={`${activeChat ? "hidden md:flex" : "flex"} relative flex-col w-full md:w-[340px] lg:w-[380px] shrink-0 h-full min-h-0 md:border-r border-white/10 bg-black/30`}
+        className={`${activeChat ? "hidden md:flex" : "flex"} relative flex-col w-full md:w-[340px] lg:w-[380px] shrink-0 h-full min-h-0 overflow-hidden md:border-r border-white/10 bg-black/30`}
       >
         <div className="flex-1 min-h-0">{sidePanel}</div>
         <MobileTabBar view={view} onChange={changeView} unread={totalUnread} missed={calls.missedCount} />
@@ -453,7 +461,7 @@ const Messenger = () => {
       <AnimatePresence>
         {m.error && (
           <motion.div
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] glass-strong flex items-center gap-3 pl-4 pr-2 py-2 max-w-[90vw]"
+            className="fixed top-[calc(env(safe-area-inset-top)+1rem)] left-1/2 -translate-x-1/2 z-[300] glass-strong flex items-center gap-3 pl-4 pr-2 py-2 max-w-[90vw]"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}

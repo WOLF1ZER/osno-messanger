@@ -9,7 +9,7 @@ import { LogoMark, Wordmark } from "./ui/Logo";
 const SetupRequired = () => {
   if (import.meta.env.DEV) {
     return (
-      <div className="min-h-[100dvh] bg-space bg-grid grid place-items-center px-6">
+      <div className="h-full overflow-y-auto bg-space bg-grid grid place-items-center px-6 py-8">
         <div className="glass-strong max-w-lg w-full p-8 sm:p-10">
           <LogoMark className="w-12 mb-6" />
           <p className="eyebrow mb-2">Developer setup</p>
@@ -34,7 +34,7 @@ VITE_VAPID_PUBLIC_KEY=B...`}
   }
 
   return (
-    <div className="min-h-[100dvh] bg-space relative overflow-hidden flex flex-col">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-space relative flex flex-col">
       <div className="absolute inset-0 bg-grid pointer-events-none [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
 
       <header className="relative z-10 flex items-center gap-3 px-6 sm:px-10 h-20">

@@ -9,7 +9,7 @@ const HINT = {
   denied: "Blocked by your browser. Allow notifications for this site in its settings, then reload.",
   "needs-install": "On iPhone and iPad, install OSNO to your Home Screen first (see Install app below).",
   unsupported: "This browser doesn't support push notifications.",
-  "not-configured": "Push isn't set up yet (VITE_VAPID_PUBLIC_KEY missing).",
+  "not-configured": "Push isn't set up yet — the app's VAPID public key is missing or invalid.",
 };
 
 /** Push notifications on/off for this device. */

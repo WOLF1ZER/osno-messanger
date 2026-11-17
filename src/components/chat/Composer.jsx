@@ -45,7 +45,7 @@ const Composer = ({ onSendText, onAttach, onRecord, disabled }) => {
   return (
     <div className="shrink-0 px-3 sm:px-5 pt-3 pb-safe border-t border-white/10 bg-black/60 backdrop-blur-xl">
       <div className="flex items-end gap-2">
-        <div className="relative flex-1 flex items-end glass rounded-3xl pl-2 pr-1.5 transition-colors focus-within:border-white/30">
+        <div className="relative flex-1 min-w-0 flex items-end glass rounded-3xl pl-2 pr-1.5 transition-colors focus-within:border-white/30">
           <div ref={emojiRef} className="relative self-end pb-1">
             <button
               type="button"
@@ -89,7 +89,7 @@ const Composer = ({ onSendText, onAttach, onRecord, disabled }) => {
               }
             }}
             placeholder={disabled ? "You can't message this user" : "Write a message…"}
-            className="flex-1 resize-none bg-transparent outline-none text-[15px] text-white placeholder:text-ink-400 py-3 px-1 max-h-[140px] leading-6 disabled:cursor-not-allowed"
+            className="flex-1 min-w-0 w-full resize-none bg-transparent outline-none text-[15px] text-white placeholder:text-ink-400 py-3 px-1 max-h-[140px] leading-6 disabled:cursor-not-allowed"
           />
 
           <div className="flex items-center self-end pb-1">

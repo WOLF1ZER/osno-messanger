@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { FiPaperclip, FiSmile, FiMic, FiArrowUp } from "react-icons/fi";
+import { FiPaperclip, FiSmile, FiMic, FiArrowUp, FiCornerUpLeft, FiX } from "react-icons/fi";
+import { messagePreview } from "../../lib/format";
 
 // The emoji picker is large; load it only when first opened.
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
-const Composer = ({ onSendText, onAttach, onRecord, disabled }) => {
+const Composer = ({ onSendText, onAttach, onRecord, disabled, replyTo, onCancelReply }) => {
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const inputRef = useRef(null);
@@ -22,6 +23,15 @@ const Composer = ({ onSendText, onAttach, onRecord, disabled }) => {
       document.removeEventListener("keydown", onKey);
     };
   }, [emojiOpen]);
+
+  // replying: put the cursor in the box; Esc cancels the reply
+  useEffect(() => {
+    if (!replyTo) return;
+    inputRef.current?.focus();
+    const onKey = (e) => e.key === "Escape" && onCancelReply?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [replyTo, onCancelReply]);
 
   // auto-grow textarea
   useEffect(() => {
@@ -44,6 +54,18 @@ const Composer = ({ onSendText, onAttach, onRecord, disabled }) => {
 
   return (
     <div className="shrink-0 px-3 sm:px-5 pt-3 pb-safe border-t border-white/10 bg-black/60 backdrop-blur-xl">
+      {replyTo && (
+        <div className="flex items-center gap-3 mb-2 pl-3 pr-1 py-1.5 rounded-2xl bg-white/[0.05] border-l-2 border-white animate-fade-up">
+          <FiCornerUpLeft size={16} className="text-ink-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white truncate">Reply to {replyTo.name}</p>
+            <p className="text-[13px] text-ink-400 truncate">{messagePreview(replyTo.preview)}</p>
+          </div>
+          <button onClick={onCancelReply} className="icon-btn w-8 h-8 shrink-0" aria-label="Cancel reply">
+            <FiX size={16} />
+          </button>
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <div className="relative flex-1 min-w-0 flex items-end glass rounded-3xl pl-2 pr-1.5 transition-colors focus-within:border-white/30">
           <div ref={emojiRef} className="relative self-end pb-1">

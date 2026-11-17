@@ -71,12 +71,36 @@ export const disablePush = async () => {
   await sub.unsubscribe();
 };
 
-/** Re-link an existing subscription to whoever is signed in now (e.g. after switching accounts). */
+const sameKey = (sub) => {
+  const key = sub.options?.applicationServerKey;
+  if (!key) return true; // browser doesn't tell us — assume it's fine
+  const a = new Uint8Array(key);
+  const b = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+};
+
+/**
+ * Called on every app start. Keeps this device's push working:
+ *  - links the subscription to whoever is signed in now
+ *  - re-subscribes if the browser/iOS dropped the subscription or the VAPID key changed
+ */
 export const refreshPushSubscription = async () => {
-  if (!supported() || Notification.permission !== "granted") return;
-  const reg = await navigator.serviceWorker.getRegistration();
-  const sub = await reg?.pushManager.getSubscription();
-  if (sub) await save(sub).catch((e) => console.warn("push refresh failed", e));
+  try {
+    if (!supported() || Notification.permission !== "granted" || !VAPID_PUBLIC_KEY || !vapidKeyValid()) return;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !sameKey(sub)) {
+      await supabase.rpc("delete_push_subscription", { p_endpoint: sub.endpoint });
+      await sub.unsubscribe();
+      sub = null;
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+    }
+    await save(sub);
+  } catch (e) {
+    console.warn("push refresh failed", e);
+  }
 };
 
 /** On logout: stop this device from receiving the old account's notifications. */

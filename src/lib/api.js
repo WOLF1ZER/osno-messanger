@@ -36,7 +36,17 @@ export const toUiMessage = (row, myId) => ({
   timestamp: Date.parse(row.created_at),
   expiresAt: row.expires_at ? Date.parse(row.expires_at) : null,
   sentByMe: row.sender_id === myId,
+  replyTo: row.reply_to ?? null,
+  // only present when loaded with reactions; { userId: emoji }
+  ...(row.message_reactions ? { reactions: reactionsMap(row.message_reactions) } : {}),
 });
+
+/** [{ user_id, emoji }] -> { userId: emoji } (removed reactions have emoji = null) */
+export const reactionsMap = (rows) => {
+  const out = {};
+  for (const r of rows ?? []) if (r.emoji) out[r.user_id] = r.emoji;
+  return out;
+};
 
 const FINAL = ["ended", "missed", "declined", "cancelled"];
 
@@ -111,16 +121,38 @@ export const unblockUser = async (me, other) =>
 // ---------- messages ----------
 
 /** Newest PAGE_SIZE messages before `before` (ISO string), returned oldest-first. */
+const MESSAGE_SELECT = "*, message_reactions(user_id, emoji)";
+
 export const fetchMessages = async (chatId, before) => {
   let q = supabase
     .from("messages")
-    .select("*")
+    .select(MESSAGE_SELECT)
     .eq("chat_id", chatId)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE);
   if (before) q = q.lt("created_at", before);
   return must(await q).reverse();
 };
+
+/** Messages newer than `after` (ISO), oldest first — used to catch up after the connection dropped. */
+export const fetchMessagesAfter = async (chatId, after) =>
+  must(
+    await supabase
+      .from("messages")
+      .select(MESSAGE_SELECT)
+      .eq("chat_id", chatId)
+      .gt("created_at", after)
+      .order("created_at", { ascending: true })
+      .limit(200),
+  );
+
+/** Specific messages (e.g. the original of a reply that isn't loaded yet). */
+export const fetchMessagesByIds = async (ids) =>
+  ids.length ? must(await supabase.from("messages").select("*").in("id", ids)) : [];
+
+/** Set, change or remove (emoji = null) my reaction to a message. */
+export const setReaction = async (messageId, emoji) =>
+  must(await supabase.rpc("set_reaction", { p_message: messageId, p_emoji: emoji }));
 
 export const insertMessage = async (row) => must(await supabase.from("messages").insert(row).select().single());
 

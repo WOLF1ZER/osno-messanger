@@ -131,6 +131,8 @@ const Messenger = () => {
     [m.users, me.id],
   );
   const activePeer = peerOf(activeChat);
+  const ensureQuotes = m.ensureQuotes;
+  const onNeedQuotes = useCallback((ids) => activeId && ensureQuotes(activeId, ids), [activeId, ensureQuotes]);
 
   // ---------- navigation ----------
   const openChat = useCallback(
@@ -226,11 +228,38 @@ const Messenger = () => {
     refreshPushSubscription();
   }, [me.id]);
 
-  // unread badge on the installed app icon
+  // unread badge on the installed app icon: total unread messages (muted chats excluded),
+  // refreshed whenever the counts change and when the app is put in the background
+  const unreadMessages = m.unreadMessages;
   useEffect(() => {
     if (!("setAppBadge" in navigator)) return;
-    (totalUnread ? navigator.setAppBadge(totalUnread) : navigator.clearAppBadge()).catch(() => {});
-  }, [totalUnread]);
+    const apply = () => (unreadMessages ? navigator.setAppBadge(unreadMessages) : navigator.clearAppBadge()).catch(() => {});
+    apply();
+    document.addEventListener("visibilitychange", apply);
+    return () => document.removeEventListener("visibilitychange", apply);
+  }, [unreadMessages]);
+
+  // tell the service worker whether the app is really on screen (and which chat is open),
+  // so it shows notifications only when they're needed
+  useEffect(() => {
+    const sw = () => navigator.serviceWorker?.controller;
+    const beat = () =>
+      sw()?.postMessage(document.visibilityState === "visible" ? { type: "foreground", chatId: activeId } : { type: "background" });
+    beat();
+    const t = setInterval(beat, 5000);
+    document.addEventListener("visibilitychange", beat);
+    window.addEventListener("pagehide", beat);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", beat);
+      window.removeEventListener("pagehide", beat);
+    };
+  }, [activeId]);
+
+  // opening a chat removes its notifications from the phone's notification list
+  useEffect(() => {
+    if (activeId) navigator.serviceWorker?.controller?.postMessage({ type: "chat-opened", chatId: activeId });
+  }, [activeId]);
 
   // deep links: /?chat=<id>, /?call=<id>, /?view=calls|search|profile (from notifications & app shortcuts)
   const pendingLink = useRef(null);
@@ -341,14 +370,18 @@ const Messenger = () => {
       chat={activeChat}
       user={activePeer}
       users={m.users}
+      myId={me.id}
+      quotes={m.quotes}
+      onNeedQuotes={onNeedQuotes}
+      onReact={(message, emoji) => m.toggleReaction(activeChat.id, message, emoji)}
       ongoingCall={calls.ongoingByChat[activeChat.id]}
       onJoinCall={joinOngoing}
       onBack={closeChat}
       onShowInfo={() => setInfoOpen((v) => !v)}
       onCall={(video) => callChat(activeChat, video)}
-      onSendText={(text) => m.sendText(activeChat.id, text)}
-      onSendAudio={(audio) => m.sendAudio(activeChat.id, audio)}
-      onSendFiles={(files, caption) => m.sendFiles(activeChat.id, files, caption)}
+      onSendText={(text, replyTo) => m.sendText(activeChat.id, text, replyTo)}
+      onSendAudio={(audio, replyTo) => m.sendAudio(activeChat.id, audio, replyTo)}
+      onSendFiles={(files, caption, replyTo) => m.sendFiles(activeChat.id, files, caption, replyTo)}
       onUnblock={() => m.toggleBlock(activeChat)}
       onLoadOlder={() => m.loadOlder(activeChat.id)}
     />

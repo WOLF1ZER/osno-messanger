@@ -5,6 +5,7 @@ import { playEndTone, startRingback, startRingtone, unlockAudio } from "../../li
 import Avatar from "../ui/Avatar";
 import DisplayName from "../ui/DisplayName";
 import { useLiveKitRoom } from "../../lib/useLiveKitRoom";
+import { useWakeLock } from "../../lib/wakeLock";
 import { formatDuration } from "../../lib/format";
 
 const T = "[@media(min-height:700px)]:"; // roomier spacing on taller screens
@@ -93,6 +94,7 @@ const CallScreen = ({ call, title, avatarUser, people, onAccept, onDecline, onHa
   const incomingRinging = call.direction === "incoming" && call.status === "ringing";
   const inRoom = call.direction === "outgoing" || call.status === "active";
   const lk = useLiveKitRoom({ callId: call.id, enabled: inRoom, video: call.video });
+  useWakeLock(true); // keep the screen on (no dimming / auto-lock) for the whole call
   const live = lk.peerJoined;
 
   const [startedAt, setStartedAt] = useState(null);

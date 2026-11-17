@@ -24,9 +24,29 @@ registerRoute(
   new CacheFirst({ cacheName: "avatars", plugins: [new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 })] }),
 );
 
-// the page asks us to activate a new version ("Update" button)
+// ---------- messages from the app ----------
+// The app reports every few seconds whether it is really on screen. We only skip showing a
+// notification when that report is fresh: iOS sometimes reports a backgrounded app as "visible",
+// and it cancels push subscriptions of apps that receive pushes without showing a notification.
+let foregroundAt = 0;
+let openChatId = null;
+
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+  const msg = event.data ?? {};
+  if (msg.type === "SKIP_WAITING") self.skipWaiting(); // "Update" button
+  if (msg.type === "foreground") {
+    foregroundAt = Date.now();
+    openChatId = msg.chatId ?? null;
+  }
+  if (msg.type === "background") foregroundAt = 0;
+  // a chat was opened in the app: remove its notifications from the system tray
+  if (msg.type === "chat-opened" && msg.chatId) {
+    event.waitUntil(
+      self.registration
+        .getNotifications({ tag: `chat-${msg.chatId}` })
+        .then((list) => list.forEach((n) => n.close())),
+    );
+  }
 });
 
 // ---------- push notifications ----------
@@ -41,9 +61,11 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      const visible = windows.find((w) => w.visibilityState === "visible" && w.focused);
-      // The app is open and on screen: it already shows the message / ringing UI itself.
-      if (visible) {
+      const visible = windows.find((w) => w.visibilityState === "visible");
+      const appOnScreen = visible && Date.now() - foregroundAt < 15_000;
+      const isOpenChat = data.tag && openChatId && data.tag === `chat-${openChatId}`;
+      // The app is confirmed on screen and already shows this message / the ringing call itself.
+      if (appOnScreen && (data.kind === "call" || isOpenChat)) {
         visible.postMessage({ type: "push", payload: data });
         return;
       }

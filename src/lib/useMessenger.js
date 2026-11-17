@@ -33,6 +33,7 @@ export const useMessenger = (me) => {
   const [chats, setChats] = useState([]);
   const [people, setPeople] = useState({}); // id -> user
   const [threads, setThreads] = useState({}); // chatId -> { items, loading, hasMore }
+  const [quotes, setQuotes] = useState({}); // messageId -> message (originals of replies that aren't loaded)
   const [online, setOnline] = useState(() => new Set());
   const [loadingChats, setLoadingChats] = useState(true);
   const [error, setError] = useState(null);
@@ -41,6 +42,8 @@ export const useMessenger = (me) => {
   chatsRef.current = chats;
   const peopleRef = useRef(people);
   peopleRef.current = people;
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
 
   const fail = useCallback((err, fallback = "Something went wrong") => {
     console.error(err);
@@ -89,17 +92,6 @@ export const useMessenger = (me) => {
     loadChats();
   }, [loadChats]);
 
-  // refresh when coming back to the app (membership / titles may have changed)
-  useEffect(() => {
-    const onVisible = () => document.visibilityState === "visible" && loadChats();
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", loadChats);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", loadChats);
-    };
-  }, [loadChats]);
-
   const patchChat = (id, patch) => setChats((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
   // ---------------- messages ----------------
@@ -137,15 +129,125 @@ export const useMessenger = (me) => {
     [threads, myId, upsertMessages, fail],
   );
 
+  /**
+   * Bring an already-loaded chat up to date (new messages + recent reactions).
+   * Needed because phones drop the live connection in the background: anything sent meanwhile
+   * would otherwise only show up after restarting the app.
+   */
+  const syncThread = useCallback(
+    async (chatId) => {
+      const t = threadsRef.current[chatId];
+      if (!t?.loaded || t.loading) return;
+      try {
+        const rows = await api.fetchMessages(chatId); // newest page, with reactions
+        const fresh = rows.map((r) => ({ ...api.toUiMessage(r, myId), pending: false }));
+        const lastKnown = t.items.filter((m) => !m.pending && !m.failed).at(-1)?.timestamp ?? 0;
+        if (fresh.length === api.PAGE_SIZE && fresh[0].timestamp > lastKnown) {
+          // more than a page was missed: start this chat over from the newest page
+          setThreads((p) => ({ ...p, [chatId]: { ...p[chatId], items: [...fresh, ...p[chatId].items.filter((m) => m.pending)], hasMore: true } }));
+        } else {
+          upsertMessages(chatId, fresh);
+        }
+        if (activeIdRef.current === chatId && fresh.some((m) => m.timestamp > lastKnown && !m.sentByMe)) {
+          api.markChatRead(chatId);
+        }
+      } catch (e) {
+        console.warn("sync failed", e);
+      }
+    },
+    [myId, upsertMessages],
+  );
+
+  /** Full catch-up: chat list (unread counts) + every chat that's already open in memory. */
+  const resync = useCallback(async () => {
+    await loadChats();
+    const ids = Object.keys(threadsRef.current);
+    const active = activeIdRef.current;
+    for (const id of [active, ...ids.filter((x) => x !== active)].filter(Boolean)) await syncThread(id);
+    if (active) patchChat(active, { unread: 0 });
+  }, [loadChats, syncThread]);
+
   const setActiveChat = useCallback(
     (chatId) => {
       activeIdRef.current = chatId;
       if (!chatId) return;
-      loadMessages(chatId);
+      if (threadsRef.current[chatId]?.loaded) syncThread(chatId); // reopened: fetch what's new
+      else loadMessages(chatId);
       patchChat(chatId, { unread: 0 });
       api.markChatRead(chatId);
     },
-    [loadMessages],
+    [loadMessages, syncThread],
+  );
+
+  // catch up whenever the app comes back to the foreground or the network returns,
+  // and check the open chat regularly while the app is on screen (safety net)
+  useEffect(() => {
+    if (!myId) return;
+    const onVisible = () => document.visibilityState === "visible" && resync();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", resync);
+    window.addEventListener("focus", onVisible);
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadChats();
+      if (activeIdRef.current) syncThread(activeIdRef.current);
+    }, 30_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", resync);
+      window.removeEventListener("focus", onVisible);
+      clearInterval(t);
+    };
+  }, [myId, resync, loadChats, syncThread]);
+
+  // ---------------- replies ----------------
+  /** Load originals of replies that aren't in memory (e.g. older than the loaded page). */
+  const requestedQuotes = useRef(new Set());
+  const ensureQuotes = useCallback(async (chatId, ids) => {
+    const items = threadsRef.current[chatId]?.items ?? [];
+    const missing = [...new Set(ids)].filter(
+      (id) => id && !items.some((m) => m.id === id) && !requestedQuotes.current.has(id),
+    );
+    if (!missing.length) return;
+    missing.forEach((id) => requestedQuotes.current.add(id)); // never ask twice (originals may be deleted)
+    try {
+      const rows = await api.fetchMessagesByIds(missing);
+      setQuotes((q) => ({ ...q, ...Object.fromEntries(rows.map((r) => [r.id, api.toUiMessage(r, myId)])) }));
+    } catch (e) {
+      console.warn(e);
+    }
+  }, [myId]);
+
+  // ---------------- reactions ----------------
+  const applyReaction = useCallback((chatId, messageId, userId, emoji) => {
+    setThreads((prev) => {
+      const t = prev[chatId];
+      if (!t) return prev;
+      const items = t.items.map((m) => {
+        if (m.id !== messageId) return m;
+        const reactions = { ...(m.reactions ?? {}) };
+        if (emoji) reactions[userId] = emoji;
+        else delete reactions[userId];
+        return { ...m, reactions };
+      });
+      return { ...prev, [chatId]: { ...t, items } };
+    });
+  }, []);
+
+  /** Tap an emoji: set it, or remove it if it's already my reaction. */
+  const toggleReaction = useCallback(
+    async (chatId, message, emoji) => {
+      const before = message.reactions?.[myId] ?? null;
+      const next = before === emoji ? null : emoji;
+      applyReaction(chatId, message.id, myId, next);
+      try {
+        await api.setReaction(message.id, next);
+      } catch (e) {
+        applyReaction(chatId, message.id, myId, before);
+        fail(e, "Couldn't react");
+      }
+    },
+    [myId, applyReaction, fail],
   );
 
   // ---------------- sending ----------------
@@ -168,6 +270,7 @@ export const useMessenger = (me) => {
           file_size: draft.fileSize ?? null,
           mime_type: draft.mimeType ?? null,
           duration: draft.duration ?? null,
+          reply_to: draft.replyTo ?? null,
         });
         upsertMessages(chatId, [{ ...api.toUiMessage(row, myId), pending: false }]);
       } catch (e) {
@@ -178,15 +281,15 @@ export const useMessenger = (me) => {
     [myId, upsertMessages, fail],
   );
 
-  const sendText = (chatId, text) => send(chatId, { type: "text", text });
+  const sendText = (chatId, text, replyTo) => send(chatId, { type: "text", text, replyTo });
 
-  const sendAudio = (chatId, { blob, url, duration }) => {
+  const sendAudio = (chatId, { blob, url, duration }, replyTo) => {
     const ext = (blob.type.split("/")[1] || "webm").split(";")[0];
     const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type || "audio/webm" });
-    return send(chatId, { type: "audio", localUrl: url, duration, fileName: file.name, fileSize: file.size, mimeType: file.type }, file);
+    return send(chatId, { type: "audio", localUrl: url, duration, fileName: file.name, fileSize: file.size, mimeType: file.type, replyTo }, file);
   };
 
-  const sendFiles = (chatId, files, caption) =>
+  const sendFiles = (chatId, files, caption, replyTo) =>
     Promise.all(
       files.map((f, i) =>
         send(
@@ -198,6 +301,7 @@ export const useMessenger = (me) => {
             fileSize: f.size,
             mimeType: f.type,
             caption: i === files.length - 1 && caption ? caption : undefined,
+            replyTo: i === 0 ? replyTo : undefined,
           },
           f,
         ),
@@ -277,7 +381,8 @@ export const useMessenger = (me) => {
     await run(() => api.clearChat(chatId), "Couldn't delete chat");
   };
 
-  // ---------------- realtime: messages + chat settings ----------------
+  // ---------------- realtime: messages, reactions, chat settings ----------------
+  const subscribedOnce = useRef(false);
   useEffect(() => {
     if (!myId) return;
     const channel = supabase
@@ -306,11 +411,20 @@ export const useMessenger = (me) => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chats" }, ({ new: row }) => {
         patchChat(row.id, { privateMode: row.private_mode });
       })
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, ({ new: r }) => {
+        if (r?.message_id) applyReaction(r.chat_id, r.message_id, r.user_id, r.emoji);
+      })
+      .subscribe((status) => {
+        // the connection came back after dropping (phone slept, network switched): fetch what we missed
+        if (status === "SUBSCRIBED") {
+          if (subscribedOnce.current) resync();
+          subscribedOnce.current = true;
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [myId, loadChats, upsertMessages, ensurePeople]);
+  }, [myId, loadChats, upsertMessages, ensurePeople, applyReaction, resync]);
 
   // ---------------- presence: who is online ----------------
   useEffect(() => {
@@ -356,8 +470,16 @@ export const useMessenger = (me) => {
     [chats, threads],
   );
 
+  // total unread messages in non-muted chats (for the app icon badge)
+  const unreadMessages = useMemo(() => chats.reduce((n, c) => n + (c.muted ? 0 : c.unread || 0), 0), [chats]);
+
   return {
     chats: uiChats,
+    unreadMessages,
+    quotes,
+    ensureQuotes,
+    toggleReaction,
+    resync,
     users,
     addPeople,
     ensurePeople,

@@ -1,31 +1,71 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MdOutlineKeyboardArrowLeft } from "react-icons/md";
-import { FiPhone, FiInfo, FiClock, FiVideo, FiUsers } from "react-icons/fi";
+import { FiPhone, FiInfo, FiClock, FiVideo, FiUsers, FiArrowDown } from "react-icons/fi";
 import Avatar from "../ui/Avatar";
 import MessageBubble from "./MessageBubble";
 import Composer from "./Composer";
 import AudioRecorder from "./AudioRecorder";
 import FileSender from "./FileSender";
+import MessageActions from "./MessageActions";
 import { formatDayLabel, isNewDay } from "../../lib/format";
 
 /** Unified chat window (replaces the duplicated Inbox / InboxMobile). */
 const Conversation = ({
-  chat, user, users, ongoingCall, onJoinCall, onBack, onShowInfo, onCall,
+  chat, user, users, myId, quotes, onNeedQuotes, onReact, ongoingCall, onJoinCall, onBack, onShowInfo, onCall,
   onSendText, onSendAudio, onSendFiles, onUnblock, onLoadOlder,
 }) => {
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState(null); // message being replied to
+  const [actionsFor, setActionsFor] = useState(null); // message whose menu is open
+  const [highlighted, setHighlighted] = useState(null);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
   const scrollRef = useRef(null);
 
-  // keep the newest message in view (but not when older messages are prepended)
-  const lastId = chat.messages.at(-1)?.id;
-  const firstLoad = useRef(true);
-  useEffect(() => {
+  // The list is a bottom-anchored (column-reverse) scroller: it opens at the newest message
+  // instantly, stays there when images load or new messages arrive, and older pages are
+  // added above without moving what you're looking at.
+  const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+  useLayoutEffect(() => scrollToBottom(), [chat.id, scrollToBottom]);
+
+  // my own new message -> always show it
+  const last = chat.messages.at(-1);
+  useEffect(() => {
+    if (last?.sentByMe && last.pending) scrollToBottom(true);
+  }, [last?.id, last?.sentByMe, last?.pending, scrollToBottom]);
+
+  const onScroll = (e) => setAwayFromBottom(e.currentTarget.scrollTop < -400);
+
+  // load originals of replies that aren't on screen
+  const byId = new Map(chat.messages.map((m) => [m.id, m]));
+  const missingQuotes = chat.messages.filter((m) => m.replyTo && !byId.has(m.replyTo) && !quotes?.[m.replyTo]).map((m) => m.replyTo);
+  const missingKey = missingQuotes.join(",");
+  useEffect(() => {
+    if (missingKey) onNeedQuotes?.(missingKey.split(","));
+  }, [missingKey, onNeedQuotes]);
+  const findMessage = (id) => byId.get(id) ?? quotes?.[id];
+  const nameOf = (m) => (!m ? undefined : m.sentByMe ? "You" : users?.[m.senderId]?.name ?? (chat.isGroup ? "Member" : user.name));
+
+  const jumpTo = (id) => {
+    const el = scrollRef.current?.querySelector(`[data-mid="${id}"]`);
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: firstLoad.current ? "auto" : "smooth" });
-    if (lastId) firstLoad.current = false;
-  }, [lastId, chat.id]);
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlighted(id);
+    setTimeout(() => setHighlighted((h) => (h === id ? null : h)), 1600);
+  };
+
+  const startReply = (m) => {
+    setReplyTo(m);
+    navigator.vibrate?.(10);
+  };
+  const takeReply = () => {
+    const id = replyTo?.id;
+    setReplyTo(null);
+    return id;
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
@@ -76,8 +116,10 @@ const Conversation = ({
         </div>
       )}
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 pb-6 bg-grid">
+      {/* Messages (bottom-anchored) */}
+      <div className="relative flex-1 min-h-0">
+      <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto flex flex-col-reverse px-3 sm:px-6 bg-grid">
+      <div className="shrink-0 min-h-full flex flex-col pb-6">
         {chat.privateMode && (
           <div className="flex justify-center pt-4">
             <span className="flex items-center gap-2 glass px-4 py-2 eyebrow text-ink-200">
@@ -93,10 +135,10 @@ const Conversation = ({
           </div>
         )}
         {chat.messages.length === 0 && chat.loadingMessages && (
-          <div className="h-full grid place-items-center eyebrow">Loading…</div>
+          <div className="flex-1 grid place-items-center eyebrow">Loading…</div>
         )}
         {chat.messages.length === 0 && !chat.loadingMessages && (
-          <div className="h-full grid place-items-center text-center">
+          <div className="flex-1 grid place-items-center text-center">
             <div>
               <p className="eyebrow mb-2">{chat.isGroup ? "New group" : "New conversation"}</p>
               <p className="font-display uppercase tracking-wider text-2xl text-white [overflow-wrap:anywhere]">
@@ -120,10 +162,40 @@ const Conversation = ({
                   <span className="divider flex-1" />
                 </div>
               )}
-              <MessageBubble message={m} grouped={grouped} senderName={senderName} />
+              <MessageBubble
+                message={m}
+                grouped={grouped}
+                senderName={senderName}
+                myId={myId}
+                quote={m.replyTo ? findMessage(m.replyTo) : undefined}
+                quoteName={m.replyTo ? nameOf(findMessage(m.replyTo)) : undefined}
+                highlighted={highlighted === m.id}
+                onReply={startReply}
+                onReact={onReact}
+                onOpenActions={setActionsFor}
+                onJumpTo={jumpTo}
+              />
             </div>
           );
         })}
+      </div>
+      </div>
+
+        {/* back to the newest message */}
+        {awayFromBottom && (
+          <button
+            onClick={() => scrollToBottom(true)}
+            aria-label="Go to newest message"
+            className="absolute right-4 bottom-4 w-11 h-11 rounded-full glass-strong grid place-items-center text-white shadow-xl animate-fade-up"
+          >
+            <FiArrowDown size={18} />
+            {chat.unread > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white text-black text-[10px] font-bold grid place-items-center">
+                {chat.unread}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {chat.blocked ? (
@@ -133,14 +205,24 @@ const Conversation = ({
         </div>
       ) : (
         <Composer
-          onSendText={onSendText}
+          key={chat.id}
+          replyTo={replyTo ? { name: nameOf(replyTo), preview: replyTo } : null}
+          onCancelReply={() => setReplyTo(null)}
+          onSendText={(text) => onSendText(text, takeReply())}
           onAttach={() => setFilesOpen(true)}
           onRecord={() => setRecorderOpen(true)}
         />
       )}
 
-      <AudioRecorder open={recorderOpen} onClose={() => setRecorderOpen(false)} onSend={onSendAudio} />
-      <FileSender open={filesOpen} onClose={() => setFilesOpen(false)} onSend={onSendFiles} />
+      <AudioRecorder open={recorderOpen} onClose={() => setRecorderOpen(false)} onSend={(audio) => onSendAudio(audio, takeReply())} />
+      <FileSender open={filesOpen} onClose={() => setFilesOpen(false)} onSend={(files, caption) => onSendFiles(files, caption, takeReply())} />
+      <MessageActions
+        message={actionsFor}
+        myReaction={actionsFor?.reactions?.[myId]}
+        onReact={(e) => onReact(actionsFor, e)}
+        onReply={() => startReply(actionsFor)}
+        onClose={() => setActionsFor(null)}
+      />
     </div>
   );
 };

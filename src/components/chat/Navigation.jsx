@@ -14,7 +14,7 @@ const badgeFor = (id, { unread, missed }) => (id === "chats" ? unread : id === "
 
 /** Vertical glass rail for tablet / desktop. */
 export const NavRail = ({ view, onChange, me, unread, missed }) => (
-  <nav className="hidden md:flex flex-col items-center w-[76px] shrink-0 h-full py-4 border-r border-white/10 bg-white/[0.02] backdrop-blur-xl">
+  <nav className="hidden md:flex flex-col items-center w-[76px] shrink-0 h-full py-6 border-r border-white/10 bg-white/[0.02] backdrop-blur-xl">
     <LogoMark className="w-9 mb-10" />
 
     <div className="flex flex-col items-center gap-2 flex-1">
@@ -56,7 +56,7 @@ export const NavRail = ({ view, onChange, me, unread, missed }) => (
  */
 export const MobileTabBar = ({ view, onChange, unread, missed }) => (
   <nav
-    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pointer-events-none"
+    className="md:hidden absolute inset-x-0 bottom-0 z-40 px-3 pb-2 pointer-events-none"
     aria-label="Main"
   >
     <div className="pointer-events-auto mx-auto max-w-md grid grid-cols-4 gap-1 p-1.5 rounded-full bg-ink-800/60 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.08)]">
